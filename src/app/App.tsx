@@ -1,0 +1,498 @@
+import React, { useState, useMemo } from 'react';
+import imgRectangle6538 from "figma:asset/39a095c5219433210528f313f4db7ed09e8b6466.png";
+import imgRectangle6539 from "figma:asset/c7319cef2b86a8f71b6765b77a10caccb7fc8b83.png";
+import imgRectangle6540 from "figma:asset/1b41f753535d961cfbba08b0eb03a1902c09f7f3.png";
+import imgRectangle6541 from "figma:asset/07e73d3701b2c2cf9a8054b1b2606088545c1b53.png";
+import imgRectangle6542 from "figma:asset/345d9f75120e49e4b6f691447bccd48abfb67431.png";
+import imgRectangle6543 from "figma:asset/28818bcf637e7596ffec2602b44c1b407fe11cf9.png";
+import imgRectangle6544 from "figma:asset/d55ecea918fdfbe2d236a4386a73a981bf45f319.png";
+import imgRectangle6545 from "figma:asset/464f20b81f02057b5cc69adbc19fb20af709c271.png";
+import imgRectangle6546 from "figma:asset/365c8fc0f53d1bc2bad0988227099e87b4730cbc.png";
+import imgRectangle6547 from "figma:asset/f286a5e73a18e796afd61d7b68c51addff2c69b6.png";
+
+// Import all page components
+import ProductListPage from './components/ProductListPage';
+import ProductDetailPage from './components/ProductDetailPage';
+import BasketPage from './components/BasketPage';
+import CheckoutPage from './components/CheckoutPage';
+import PaymentPage from './components/PaymentPage';
+import ConfirmationPage from './components/ConfirmationPage';
+import OrderConfirmationPage from './components/OrderConfirmationPage';
+import NewsstandPage from './components/NewsstandPage';
+import AboutPage from './components/AboutPage';
+import ProfilePage from './components/ProfilePage';
+import AddToCartOverlay from './components/AddToCartOverlay';
+import Menu from './components/Menu';
+
+// Enhanced product data with descriptions and locations
+const PRODUCTS = [
+  {
+    id: 1,
+    name: "Garlic clove",
+    price: "$0.89 each",
+    priceValue: 0.89,
+    farm: "Kunisaki Farms",
+    images: [imgRectangle6538, imgRectangle6539],
+    isFavorite: false,
+    description: "Bold, aromatic garlic cloves with a rich, complex flavor. Perfect for roasting, sautéing, or adding depth to any dish.",
+    location: "Grown in Gilroy, CA by Kunisaki Farms",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 2,
+    name: "Sugar snap pea",
+    price: "$2.29/lb",
+    priceValue: 2.29,
+    farm: "Helmbolt Orchards",
+    images: [imgRectangle6540, imgRectangle6539],
+    isFavorite: false,
+    description: "Crisp, sweet sugar snap peas with edible pods. Enjoy raw as a snack or lightly steamed to preserve their natural crunch.",
+    location: "Grown in Salinas Valley, CA by Helmbolt Orchards",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 3,
+    name: "Ginger",
+    price: "$4.20/lb",
+    priceValue: 4.20,
+    farm: "Bui Farms",
+    images: [imgRectangle6541],
+    isFavorite: false,
+    description: "Fresh, organic ginger root with a warm, spicy kick. Essential for Asian cooking and natural wellness remedies.",
+    location: "Grown in Hawaii by Bui Farms",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 4,
+    name: "Sweet onion",
+    price: "$0.39/lb",
+    priceValue: 0.39,
+    farm: "Castelao Farms",
+    images: [imgRectangle6542],
+    isFavorite: false,
+    description: "Mild, sweet onions perfect for caramelizing or eating raw. Low in sulfur with a delicate, pleasant flavor.",
+    location: "Grown in Vidalia, GA by Castelao Farms",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 5,
+    name: "Raspberries",
+    price: "$3.99 pint",
+    priceValue: 3.99,
+    farm: "Bernal Growers",
+    images: [imgRectangle6543],
+    isFavorite: false,
+    description: "Juicy, sweet-tart raspberries bursting with flavor. Rich in antioxidants and perfect for snacking or desserts.",
+    location: "Grown in Oregon by Bernal Growers",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 6,
+    name: "Bananas",
+    price: "$0.64/lb",
+    priceValue: 0.64,
+    farm: "Lowry Farms",
+    images: [imgRectangle6544],
+    isFavorite: false,
+    description: "Sweet, creamy bananas perfect for smoothies, baking, or eating fresh. A great source of potassium and natural energy.",
+    location: "Grown in Costa Rica by Lowry Farms",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 7,
+    name: "Avocados",
+    price: "$1.05 each",
+    priceValue: 1.05,
+    farm: "Gonzalez Produce",
+    images: [imgRectangle6545],
+    isFavorite: false,
+    description: "Creamy, buttery avocados rich in healthy fats. Perfect for guacamole, toast, or adding to salads and smoothies.",
+    location: "Grown in Michoacán, Mexico by Gonzalez Produce",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 8,
+    name: "Kale",
+    price: "$1.99 each",
+    priceValue: 1.99,
+    farm: "Green Growers",
+    images: [imgRectangle6546],
+    isFavorite: false,
+    description: "Nutrient-dense kale with a robust, earthy flavor. Excellent for salads, smoothies, or crispy kale chips.",
+    location: "Grown in California Central Valley by Green Growers",
+    dietary: ["VG", "GF", "DF"]
+  },
+  {
+    id: 9,
+    name: "Radish",
+    price: "$1.29 each",
+    priceValue: 1.29,
+    farm: "Gonzalez Produce",
+    images: [imgRectangle6547],
+    isFavorite: false,
+    description: "Crisp, peppery radishes with a fresh, clean bite. Great for salads, pickling, or as a crunchy snack.",
+    location: "Grown in San Diego County, CA by Gonzalez Produce",
+    dietary: ["VG", "GF", "DF"]
+  }
+];
+
+type SortOption = 'default' | 'a-z' | 'price';
+type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile';
+
+interface CartItem {
+  id: number;
+  name: string;
+  price: string;
+  priceValue: number;
+  image: string;
+  quantity: number;
+}
+
+interface OverlayProduct {
+  id: number;
+  name: string;
+  image: string;
+}
+
+interface CustomerInfo {
+  fullName: string;
+  address: string;
+  city: string;
+  country: string;
+  state: string;
+  zipCode: string;
+}
+
+export default function App() {
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [favorites, setFavorites] = useState<Set<number>>(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOption, setSortOption] = useState<SortOption>('default');
+  const [isNavOpen, setIsNavOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedProduct, setSelectedProduct] = useState<typeof PRODUCTS[0] | null>(null);
+  
+  // Customer information from checkout
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
+    fullName: '',
+    address: '',
+    city: '',
+    country: '',
+    state: '',
+    zipCode: ''
+  });
+  
+  // Add to cart overlay state
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [overlayProduct, setOverlayProduct] = useState<OverlayProduct | null>(null);
+  const [overlayQuantity, setOverlayQuantity] = useState(1);
+
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  const filteredAndSortedProducts = useMemo(() => {
+    let filtered = PRODUCTS.filter(product =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    switch (sortOption) {
+      case 'a-z':
+        return filtered.sort((a, b) => a.name.localeCompare(b.name));
+      case 'price':
+        return filtered.sort((a, b) => a.priceValue - b.priceValue);
+      default:
+        return filtered;
+    }
+  }, [searchTerm, sortOption]);
+
+  const toggleFavorite = (productId: number) => {
+    const newFavorites = new Set(favorites);
+    if (newFavorites.has(productId)) {
+      newFavorites.delete(productId);
+    } else {
+      newFavorites.add(productId);
+    }
+    setFavorites(newFavorites);
+  };
+
+  const showAddToCartOverlay = (product: typeof PRODUCTS[0], quantity = 1) => {
+    setOverlayProduct({
+      id: product.id,
+      name: product.name,
+      image: product.images[0]
+    });
+    setOverlayQuantity(quantity);
+    setShowOverlay(true);
+
+    // Hide overlay after 1 second
+    setTimeout(() => {
+      setShowOverlay(false);
+    }, 1000);
+  };
+
+  const addToCart = (productId?: number, quantityToAdd = 1) => {
+    let targetProduct;
+    
+    if (productId) {
+      targetProduct = PRODUCTS.find(p => p.id === productId);
+    } else if (selectedProduct) {
+      targetProduct = selectedProduct;
+    }
+    
+    if (!targetProduct) return;
+
+    // Show overlay
+    showAddToCartOverlay(targetProduct, quantityToAdd);
+
+    setCartItems(prevItems => {
+      const existingItem = prevItems.find(item => item.id === targetProduct.id);
+      
+      if (existingItem) {
+        return prevItems.map(item =>
+          item.id === targetProduct.id
+            ? { ...item, quantity: item.quantity + quantityToAdd }
+            : item
+        );
+      } else {
+        return [...prevItems, {
+          id: targetProduct.id,
+          name: targetProduct.name,
+          price: targetProduct.price,
+          priceValue: targetProduct.priceValue,
+          image: targetProduct.images[0],
+          quantity: quantityToAdd
+        }];
+      }
+    });
+  };
+
+  const updateCartItemQuantity = (productId: number, quantity: number) => {
+    if (quantity === 0) {
+      setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
+    } else {
+      setCartItems(prevItems =>
+        prevItems.map(item =>
+          item.id === productId
+            ? { ...item, quantity }
+            : item
+        )
+      );
+    }
+  };
+
+  // Navigation handlers
+  const handleProductClick = (product: typeof PRODUCTS[0]) => {
+    setSelectedProduct(product);
+    setViewMode('detail');
+  };
+
+  const handleBackToList = () => {
+    setViewMode('list');
+    setSelectedProduct(null);
+  };
+
+  const handleCartClick = () => {
+    setViewMode('basket');
+  };
+
+  const handleBackFromBasket = () => {
+    setViewMode('list');
+  };
+
+  const handleGoToCheckout = () => {
+    setViewMode('checkout');
+  };
+
+  const handleBackFromCheckout = () => {
+    setViewMode('basket');
+  };
+
+  const handleProceedToPayment = (customerData: CustomerInfo) => {
+    setCustomerInfo(customerData);
+    setViewMode('payment');
+  };
+
+  const handleBackFromPayment = () => {
+    setViewMode('checkout');
+  };
+
+  const handleProceedToConfirmation = () => {
+    setViewMode('confirmation');
+  };
+
+  const handleBackFromConfirmation = () => {
+    setViewMode('payment');
+  };
+
+  const handleCompletePurchase = () => {
+    // Show order confirmation and clear cart
+    setViewMode('orderConfirmation');
+    setCartItems([]);
+  };
+
+  const handleShopFromOrderConfirmation = () => {
+    setViewMode('list');
+    setSelectedProduct(null);
+    // Reset customer info for new order
+    setCustomerInfo({
+      fullName: '',
+      address: '',
+      city: '',
+      country: '',
+      state: '',
+      zipCode: ''
+    });
+  };
+
+  const handleMenuNavigation = (screen: string) => {
+    setViewMode(screen as ViewMode);
+    setSelectedProduct(null);
+  };
+
+  // Render current view based on viewMode
+  const renderCurrentView = () => {
+    switch (viewMode) {
+      case 'list':
+        return (
+          <ProductListPage
+            products={filteredAndSortedProducts}
+            favorites={favorites}
+            searchTerm={searchTerm}
+            sortOption={sortOption}
+            cartCount={cartCount}
+            onSearchChange={setSearchTerm}
+            onSortChange={setSortOption}
+            onToggleFavorite={toggleFavorite}
+            onAddToCart={(productId) => addToCart(productId, 1)}
+            onProductClick={handleProductClick}
+            onMenuClick={() => setIsNavOpen(true)}
+            onCartClick={handleCartClick}
+          />
+        );
+      
+      case 'detail':
+        return selectedProduct ? (
+          <ProductDetailPage
+            product={selectedProduct}
+            cartCount={cartCount}
+            onBack={handleBackToList}
+            onAddToCart={(quantity) => addToCart(undefined, quantity)}
+            onMenuClick={() => setIsNavOpen(true)}
+            onCartClick={handleCartClick}
+          />
+        ) : null;
+      
+      case 'basket':
+        return (
+          <BasketPage
+            cartItems={cartItems}
+            onBack={handleBackFromBasket}
+            onMenuClick={() => setIsNavOpen(true)}
+            onUpdateQuantity={updateCartItemQuantity}
+            onGoToCheckout={handleGoToCheckout}
+          />
+        );
+      
+      case 'checkout':
+        return (
+          <CheckoutPage
+            cartCount={cartCount}
+            customerInfo={customerInfo}
+            onBack={handleBackFromCheckout}
+            onMenuClick={() => setIsNavOpen(true)}
+            onProceedToPayment={handleProceedToPayment}
+          />
+        );
+      
+      case 'payment':
+        return (
+          <PaymentPage
+            cartCount={cartCount}
+            onBack={handleBackFromPayment}
+            onMenuClick={() => setIsNavOpen(true)}
+            onProceedToConfirmation={handleProceedToConfirmation}
+          />
+        );
+      
+      case 'confirmation':
+        return (
+          <ConfirmationPage
+            cartItems={cartItems}
+            cartCount={cartCount}
+            onBack={handleBackFromConfirmation}
+            onMenuClick={() => setIsNavOpen(true)}
+            onUpdateQuantity={updateCartItemQuantity}
+            onCompletePurchase={handleCompletePurchase}
+          />
+        );
+      
+      case 'orderConfirmation':
+        return (
+          <OrderConfirmationPage
+            cartCount={0} // Cart is cleared after purchase
+            customerInfo={customerInfo}
+            onShop={handleShopFromOrderConfirmation}
+            onMenuClick={() => setIsNavOpen(true)}
+          />
+        );
+      
+      case 'newsstand':
+        return (
+          <NewsstandPage
+            onBack={handleBackToList}
+            onMenuClick={() => setIsNavOpen(true)}
+            onCartClick={handleCartClick}
+            cartCount={cartCount}
+          />
+        );
+
+      case 'about':
+        return (
+          <AboutPage
+            onBack={handleBackToList}
+            onMenuClick={() => setIsNavOpen(true)}
+            onCartClick={handleCartClick}
+            cartCount={cartCount}
+          />
+        );
+
+      case 'profile':
+        return (
+          <ProfilePage
+            customerInfo={customerInfo}
+            onUpdateCustomerInfo={setCustomerInfo}
+            onBack={handleBackToList}
+            onMenuClick={() => setIsNavOpen(true)}
+            onCartClick={handleCartClick}
+            cartCount={cartCount}
+          />
+        );
+      
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      {/* iPhone 16 Container */}
+      <div className="w-[393px] h-[852px] bg-[#ffffff] relative overflow-hidden rounded-[40px] shadow-2xl border-8 border-black">
+        
+        {renderCurrentView()}
+
+        {/* Add to Cart Overlay */}
+        <AddToCartOverlay
+          isVisible={showOverlay}
+          product={overlayProduct}
+          quantity={overlayQuantity}
+        />
+
+        {/* Custom Menu */}
+        <Menu
+          isOpen={isNavOpen}
+          onClose={() => setIsNavOpen(false)}
+          onNavigate={handleMenuNavigation}
+        />
+      </div>
+    </div>
+  );
+}
