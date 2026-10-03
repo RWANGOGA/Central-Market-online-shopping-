@@ -161,6 +161,10 @@ interface CustomerInfo {
   phone: string;
   region: string;
   district: string;
+  /** Carried through so a delivery can be as precise as the data allows. */
+  subCounty: string;
+  parish: string;
+  village: string;
   address: string;
 }
 
@@ -195,6 +199,9 @@ export default function App() {
     phone: '',
     region: '',
     district: '',
+    subCounty: '',
+    parish: '',
+    village: '',
     address: ''
   });
   
@@ -406,6 +413,9 @@ export default function App() {
       phone: '',
       region: '',
       district: '',
+      subCounty: '',
+      parish: '',
+      village: '',
       address: ''
     });
   };

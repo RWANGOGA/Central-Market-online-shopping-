@@ -61,13 +61,35 @@ export async function GET(request: Request) {
     ? await db.query.regions.findFirst({ where: eq(regions.name, rawRegion) })
     : null;
 
-  // Prefer a district inside the named region, so "Mukono" resolves against
-  // Central Region rather than whichever row happens to come back first.
+  // Region names by id, so a rejection can say where the district actually is.
+  const allRegions = await db.select({ id: regions.id, name: regions.name }).from(regions);
+  const regionNameById = new Map(allRegions.map((r) => [r.id, r.name]));
+  const regionOf = (id: number) => regionNameById.get(id) ?? 'another region';
+
+  // A named region that does not exist is a hard error. Guessing would place a
+  // delivery in the wrong region.
+  if (rawRegion && !regionRow) {
+    return error(`Unknown region "${rawRegion}".`, 422);
+  }
+
   const candidates = await db.select().from(districts).where(eq(districts.name, place));
-  const district =
-    (regionRow
-      ? candidates.find((d) => d.regionId === regionRow.id)
-      : undefined) ?? candidates[0];
+
+  // When a region was supplied, only a district inside that region will do.
+  // Previously this fell back to any candidate, which meant Central Region plus
+  // a Northern district silently resolved to the Northern district.
+  const district = regionRow
+    ? candidates.find((d) => d.regionId === regionRow.id)
+    : candidates[0];
+
+  if (rawRegion && candidates.length > 0 && !district) {
+    const recorded = candidates
+      .map((d) => `${d.name} (${regionOf(d.regionId) ?? 'another region'})`)
+      .join(', ');
+    return error(
+      `"${place}" is not in ${rawRegion}. It is recorded as ${recorded}. Check that the district and region belong together.`,
+      422,
+    );
+  }
 
   if (district) {
     return json({
@@ -93,6 +115,13 @@ export async function GET(request: Request) {
   const centre = loadTownCentres().find(
     (t) => t.name.toLowerCase() === place.toLowerCase() && (!rawRegion || t.region === rawRegion),
   );
+
+  if (rawRegion && !centre && candidates.length === 0) {
+    return error(
+      `"${place}" is not recorded in ${rawRegion}. Check that the district and region belong together.`,
+      422,
+    );
+  }
 
   if (centre) {
     return json({

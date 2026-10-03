@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { carts, customers, orderItems, orders } from '@/db/schema';
 import { loadCart } from '@/lib/cart';
 import { error, json, parsePositiveInt } from '@/lib/http';
+import { checkLocation } from '@/lib/locationGuard';
 
 /**
  * All amounts are whole Ugandan shillings. The shilling has no minor unit in
@@ -60,6 +61,27 @@ export async function POST(request: Request) {
   });
   if (!customer) return error(`Customer ${customerId} not found`, 404);
 
+  // Re-check the administrative chain at order time. A customer row can be
+  // stale relative to the hierarchy, and an order routes a real delivery, so
+  // the pair is verified again rather than trusted.
+  const location = await checkLocation({
+    region: customer.region,
+    district: customer.district,
+    subCounty: customer.subCounty,
+    parish: customer.parish,
+    village: customer.village,
+  });
+
+  if (!location.ok) {
+    return json(
+      {
+        error: `This customer's saved address is inconsistent: ${location.message}`,
+        conflict: { level: location.level },
+      },
+      { status: 422 },
+    );
+  }
+
   const subtotal = cart.subtotal;
   const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
   const tax = Math.round(subtotal * TAX_RATE);
@@ -78,11 +100,13 @@ export async function POST(request: Request) {
         total,
         shippingAddress: {
           fullName: customer.fullName,
+          phone: customer.phone,
           address: customer.address,
-          city: customer.city,
-          state: customer.state,
-          zipCode: customer.zipCode,
-          country: customer.country,
+          region: customer.region,
+          district: customer.district,
+          subCounty: customer.subCounty,
+          parish: customer.parish,
+          village: customer.village,
         },
       })
       .returning();

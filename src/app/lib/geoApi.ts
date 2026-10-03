@@ -109,8 +109,185 @@ export function describePath(regions: GeoNode[], path: number[]): string {
   return names.length > 0 ? names.join(' / ') : 'All of Uganda';
 }
 
-export type LocatedPlace = {
-  name: string;
+export type LevelKey = 'region' | 'district' | 'subCounty' | 'parish' | 'village';
+
+export const LEVEL_SEQUENCE: LevelKey[] = [
+  'region',
+  'district',
+  'subCounty',
+  'parish',
+  'village',
+];
+
+export type Selection = Record<LevelKey, string>;
+
+export type SelectionOk = {
+  ok: true;
+  node: GeoNode;
+  resolved: { level: LevelKey; id: number; name: string; kind: string }[];
+  missing: LevelKey[];
+};
+
+export type SelectionError = {
+  ok: false;
+  level: LevelKey;
+  parentName: string;
+  requested: string;
+  message: string;
+};
+
+/** "Kampala (City)" -> "Kampala" */
+function normaliseName(name: string) {
+  return name
+    .replace(/\s*\((?:City|Municipality|Town|District|Sub-?county|Parish|Village)\)\s*$/i, '')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+/** District, City, Municipality and Town are siblings under a Region. */
+function rankOf(kind: string): number {
+  switch (kind) {
+    case 'District':
+    case 'City':
+    case 'Municipality':
+    case 'Town':
+      return 1;
+    case 'SubCounty':
+      return 2;
+    case 'Parish':
+      return 3;
+    case 'Village':
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+function humanLevel(level: LevelKey): string {
+  return { region: 'Region', district: 'District', subCounty: 'Sub-county', parish: 'Parish', village: 'Village' }[level];
+}
+
+/** "no sub-counties recorded", not "no sub-countys". */
+function pluralLevel(level: LevelKey): string {
+  switch (level) {
+    case 'subCounty':
+      return 'sub-counties';
+    case 'district':
+      return 'districts or towns';
+    default:
+      return `${humanLevel(level).toLowerCase()}s`;
+  }
+}
+
+/**
+ * Client-side mirror of the server's top-down check, so an inconsistent
+ * selection is caught before a request is made.
+ *
+ * This is a convenience, not the boundary. The server re-runs the same rule in
+ * api/src/lib/geoValidate.ts and is what actually decides; keeping the two in
+ * step matters, so the rules are deliberately identical rather than similar.
+ */
+export function validateSelection(regions: GeoNode[], selection: Selection): SelectionOk | SelectionError {
+  const resolved: SelectionOk['resolved'] = [];
+  const missing: LevelKey[] = [];
+
+  // The region is matched against the root list, and every deeper level against
+  // the children of the level above it. Handling the region separately keeps
+  // the rest of the walk free of null checks.
+  const regionName = selection.region;
+
+  if (!regionName || regionName.trim() === '') {
+    const firstDeeper = LEVEL_SEQUENCE.slice(1).find(
+      (level) => selection[level] && selection[level].trim() !== '',
+    );
+
+    return {
+      ok: false,
+      level: 'region',
+      parentName: 'Uganda',
+      requested: firstDeeper ? selection[firstDeeper] : '',
+      message: firstDeeper
+        ? `Choose a region before choosing a ${humanLevel(firstDeeper).toLowerCase()}.`
+        : 'Choose a region.',
+    };
+  }
+
+  const wantedRegion = normaliseName(regionName).toLowerCase();
+  const region =
+    regions.find((node) => normaliseName(node.name).toLowerCase() === wantedRegion) ?? null;
+
+  if (!region) {
+    return {
+      ok: false,
+      level: 'region',
+      parentName: 'Uganda',
+      requested: regionName,
+      message: `"${regionName}" is not in Uganda. Choose one of: ${regions
+        .slice(0, 12)
+        .map((r) => r.name)
+        .join(', ')}.`,
+    };
+  }
+
+  resolved.push({ level: 'region', id: region.id, name: region.name, kind: region.kind });
+
+  let current: GeoNode = region;
+  let currentLevel: LevelKey = 'region';
+
+  for (const level of LEVEL_SEQUENCE.slice(1)) {
+    const raw = selection[level];
+
+    if (!raw || raw.trim() === '') {
+      missing.push(level);
+      continue;
+    }
+
+    const wanted = normaliseName(raw).toLowerCase();
+    const child =
+      current.children.find((node) => normaliseName(node.name).toLowerCase() === wanted) ?? null;
+
+    if (!child) {
+      const names = current.children.map((node) => node.name);
+      return {
+        ok: false,
+        level,
+        parentName: current.name,
+        requested: raw,
+        message:
+          names.length === 0
+            ? `${current.name} has no ${pluralLevel(level)} recorded yet, so "${raw}" cannot be matched against it.`
+            : `"${raw}" is not in ${current.name}. Choose one of: ${names.slice(0, 12).join(', ')}${names.length > 12 ? ', …' : ''}.`,
+      };
+    }
+
+    if (rankOf(child.kind) <= rankOf(current.kind)) {
+      return {
+        ok: false,
+        level,
+        parentName: current.name,
+        requested: raw,
+        message: `"${child.name}" is recorded as a ${child.kind}, which is not below the level of ${current.name}. The hierarchy data is inconsistent.`,
+      };
+    }
+
+    resolved.push({ level, id: child.id, name: child.name, kind: child.kind });
+    current = child;
+    currentLevel = level;
+  }
+
+  void currentLevel;
+  return { ok: true, node: current, resolved, missing };
+}
+
+/** Clear every level below the one that just changed. */
+export function clearBelow(selection: Selection, changedLevel: LevelKey): Selection {
+  const start = LEVEL_SEQUENCE.indexOf(changedLevel) + 1;
+  const next: Selection = { ...selection };
+  for (const level of LEVEL_SEQUENCE.slice(start)) next[level] = '';
+  return next;
+}
+
+export type LocatedPlace = {  name: string;
   kind: string;
   region: string | null;
   centroid: { lat: number; lng: number };

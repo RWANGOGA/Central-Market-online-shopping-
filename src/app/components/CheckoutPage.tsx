@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import svgPaths from "../imports/svg-toln6of0ig";
 import { Input } from './ui/input';
-import {
-  REGION_NAMES,
-  placesInRegion,
-  formatPlace,
-  isValidUgandanPhone,
-  normalizeUgandanPhone,
-} from '../lib/uganda';
+import GeoCascade from './GeoCascade';
+import { isValidUgandanPhone, normalizeUgandanPhone } from '../lib/uganda';
+import { fetchHierarchy, validateSelection, type GeoNode } from '../lib/geoApi';
 
 interface CheckoutPageProps {
   cartCount: number;
@@ -17,53 +13,85 @@ interface CheckoutPageProps {
   onProceedToPayment: (customerInfo: CustomerInfo) => void;
 }
 
+/**
+ * The full administrative chain. Sub-county, parish and village are carried
+ * through so a delivery can be as precise as the data allows, even though only
+ * region and district are populated today.
+ */
 interface CustomerInfo {
   fullName: string;
   phone: string;
   region: string;
   district: string;
+  subCounty: string;
+  parish: string;
+  village: string;
   address: string;
 }
 
 export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuClick, onProceedToPayment }: CheckoutPageProps) {
   const [formData, setFormData] = useState<CustomerInfo>(customerInfo);
-
-  const [showRegionDropdown, setShowRegionDropdown] = useState(false);
-  const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
+  const [hierarchy, setHierarchy] = useState<GeoNode[] | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [phoneTouched, setPhoneTouched] = useState(false);
 
-  // Update form data when customerInfo prop changes
   useEffect(() => {
     setFormData(customerInfo);
   }, [customerInfo]);
 
-  // Switching region invalidates the district, since districts belong to a region.
+  // The cascade is driven by the same hierarchy the server validates against,
+  // so anything selectable here is guaranteed to be accepted there.
   useEffect(() => {
-    setShowDistrictDropdown(false);
-  }, [formData.region]);
+    const controller = new AbortController();
 
-  const districtOptions = placesInRegion(formData.region);
-  const showPhoneError = phoneTouched && formData.phone.trim() !== '' && !isValidUgandanPhone(formData.phone);
+    fetchHierarchy(controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result) {
+          setGeoError(
+            'Could not load the administrative areas. Start the API with npm run dev --prefix api, then reload.',
+          );
+          return;
+        }
+        setHierarchy(result.regions);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setGeoError('Could not load the administrative areas.');
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const showPhoneError =
+    phoneTouched && formData.phone.trim() !== '' && !isValidUgandanPhone(formData.phone);
+
+  /**
+   * Final check before the button will fire. The cascade already prevents a
+   * mismatched pair, so this catches anything that arrived pre-filled from a
+   * stored customer rather than chosen in this session.
+   */
+  const localCheck = hierarchy
+    ? validateSelection(hierarchy, {
+        region: formData.region,
+        district: formData.district,
+        subCounty: formData.subCounty,
+        parish: formData.parish,
+        village: formData.village,
+      })
+    : null;
 
   const isFormValid =
     formData.fullName.trim().length > 1 &&
     isValidUgandanPhone(formData.phone) &&
     formData.region !== '' &&
     formData.district !== '' &&
-    formData.address.trim().length > 3;
+    formData.address.trim().length > 3 &&
+    localCheck?.ok === true;
 
   const updateFormField = (field: keyof CustomerInfo, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleRegionSelect = (region: string) => {
-    setFormData((prev) => ({ ...prev, region, district: '' }));
-    setShowRegionDropdown(false);
-  };
-
-  const handleDistrictSelect = (district: string) => {
-    updateFormField('district', district);
-    setShowDistrictDropdown(false);
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,7 +103,11 @@ export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuCl
     if (!isFormValid) return;
 
     const phone = normalizeUgandanPhone(formData.phone);
-    onProceedToPayment({ ...formData, phone: phone ?? formData.phone, fullName: formData.fullName.trim() });
+    onProceedToPayment({
+      ...formData,
+      phone: phone ?? formData.phone,
+      fullName: formData.fullName.trim(),
+    });
   };
 
   return (
@@ -151,31 +183,24 @@ export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuCl
               </div>
             </FormField>
 
-            {/* Region */}
-            <FormField label="Region">
-              <Select
-                label="Select region"
-                value={formData.region}
-                options={REGION_NAMES}
-                open={showRegionDropdown}
-                onToggle={() => setShowRegionDropdown((open) => !open)}
-                onSelect={handleRegionSelect}
-              />
-            </FormField>
-
-            {/* District / town */}
-            <FormField label="District, municipality or town">
-              <Select
-                label={formData.region ? 'Select district or town' : 'Choose a region first'}
-                value={formData.district}
-                options={districtOptions.map(formatPlace)}
-                open={showDistrictDropdown}
-                disabled={!formData.region}
-                emptyText="No districts listed for this region"
-                onToggle={() => formData.region && setShowDistrictDropdown((open) => !open)}
-                onSelect={handleDistrictSelect}
-              />
-            </FormField>
+            {/* Administrative chain. GeoCascade enforces that a level can only
+                be chosen after the level above it, and clears every level below
+                whenever a parent changes. */}
+            <GeoCascade
+              hierarchy={hierarchy}
+              value={{
+                region: formData.region,
+                district: formData.district,
+                subCounty: formData.subCounty,
+                parish: formData.parish,
+                village: formData.village,
+              }}
+              onChange={(next) => {
+                setFormData((prev) => ({ ...prev, ...next }));
+                setGeoError(null);
+              }}
+              error={geoError}
+            />
 
             {/* Delivery address */}
             <FormField label="Delivery address and landmark">
@@ -219,93 +244,6 @@ function FormField({ label, children }: FormFieldProps) {
         </div>
         {children}
       </div>
-    </div>
-  );
-}
-
-interface SelectProps {
-  value: string;
-  options: string[];
-  open: boolean;
-  label: string;
-  disabled?: boolean;
-  emptyText?: string;
-  onToggle: () => void;
-  onSelect: (value: string) => void;
-}
-
-/**
- * A dropdown that opens upward when there is not enough room below, so the
- * last field in the form still shows its full list instead of being cut off
- * by the footer.
- */
-function Select({ value, options, open, label, disabled, emptyText, onToggle, onSelect }: SelectProps) {
-  const [openUp, setOpenUp] = useState(false);
-
-  // Measure on open so the list never renders underneath the footer button.
-  useEffect(() => {
-    if (!open) return;
-    const element = document.querySelector('[data-select-trigger]');
-    if (!element) return;
-
-    const rect = element.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    setOpenUp(spaceBelow < 220);
-  }, [open]);
-
-  return (
-    <div className="relative w-full">
-      <button
-        data-select-trigger
-        type="button"
-        onClick={onToggle}
-        disabled={disabled}
-        aria-expanded={open}
-        className={`bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px] flex items-center justify-between ${
-          disabled ? 'text-[#9a9a9a] cursor-not-allowed' : 'text-[#000000] cursor-pointer'
-        }`}
-      >
-        <span className={`text-left font-normal text-[12px] truncate ${value ? '' : 'text-[#9a9a9a]'}`}>
-          {value || label}
-        </span>
-        {!disabled && (
-          <svg
-            className={`shrink-0 w-3 h-3 transition-transform ${open && !openUp ? 'rotate-180' : ''}`}
-            fill="none"
-            viewBox="0 0 12 8"
-            aria-hidden="true"
-          >
-            <path d="M1 1.5L6 6.5L11 1.5" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </button>
-
-      {open && !disabled && (
-        <div
-          className={`absolute left-0 right-0 bg-white border border-neutral-200 rounded-lg max-h-52 overflow-y-auto z-50 ${
-            openUp ? 'bottom-full mb-1' : 'top-full mt-1'
-          }`}
-        >
-          {options.length === 0 ? (
-            <p className="px-4 py-3 text-[13px] text-[#9a9a9a] font-['Inter:Regular',_sans-serif]">
-              {emptyText ?? 'Nothing to choose yet'}
-            </p>
-          ) : (
-            options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onSelect(option)}
-                className={`w-full px-4 py-2 text-left hover:bg-[#426b1f]/5 font-['Inter:Regular',_sans-serif] text-[13px] ${
-                  option === value ? 'text-[#426b1f] font-medium' : 'text-[#000000]'
-                }`}
-              >
-                {option}
-              </button>
-            ))
-          )}
-        </div>
-      )}
     </div>
   );
 }

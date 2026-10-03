@@ -14,6 +14,9 @@ interface CustomerInfo {
   phone: string;
   region: string;
   district: string;
+  subCounty: string;
+  parish: string;
+  village: string;
   address: string;
 }
 
@@ -37,7 +40,11 @@ export default function OrderConfirmationPage({ cartCount, customerInfo, onShop,
     const addressParts = [
       customerInfo.fullName,
       customerInfo.address,
-      [customerInfo.district, customerInfo.region].filter(Boolean).join(', '),
+      // Most precise first, dropping any level that was never populated.
+      [customerInfo.village, customerInfo.parish, customerInfo.subCounty, customerInfo.district]
+        .filter(Boolean)
+        .join(', '),
+      customerInfo.region,
       customerInfo.phone
     ].filter(part => part && part.trim() !== '');
 

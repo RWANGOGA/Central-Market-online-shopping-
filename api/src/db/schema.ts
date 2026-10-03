@@ -21,15 +21,27 @@ export const products = sqliteTable('products', {
     .default(sql`(datetime('now'))`),
 });
 
+/**
+ * A delivery customer, keyed on the Ugandan mobile number rather than email.
+ * Email is optional because it is not how Ugandan customers identify
+ * themselves to a rider, and requiring it would push people to invent an
+ * address they do not use.
+ *
+ * The administrative columns form a strict top-down chain. Any level that is
+ * present must belong to the level above it; api/src/lib/locationGuard.ts
+ * enforces that on every write.
+ */
 export const customers = sqliteTable('customers', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  email: text('email').notNull().unique(),
   fullName: text('full_name').notNull(),
+  phone: text('phone').notNull().unique(),
+  email: text('email').unique(),
+  region: text('region').notNull(),
+  district: text('district'),
+  subCounty: text('sub_county'),
+  parish: text('parish'),
+  village: text('village'),
   address: text('address').notNull(),
-  city: text('city').notNull(),
-  state: text('state').notNull(),
-  zipCode: text('zip_code').notNull(),
-  country: text('country').notNull().default('US'),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
@@ -85,11 +97,13 @@ export const orders = sqliteTable('orders', {
   currency: text('currency').notNull().default('UGX'),
   shippingAddress: text('shipping_address', { mode: 'json' }).notNull().$type<{
     fullName: string;
+    phone: string;
     address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
+    region: string;
+    district: string | null;
+    subCounty: string | null;
+    parish: string | null;
+    village: string | null;
   }>(),
   createdAt: text('created_at')
     .notNull()
@@ -139,9 +153,10 @@ export const districts = sqliteTable('districts', {
   /**
    * Uganda lists its constituted cities and municipalities as separate
    * districts in boundary data, so Soroti District and Soroti City are two
-   * rows. `kind` keeps them apart.
+   * rows. `Town` marks a district headquarters added from the fallback
+   * coordinate table, which carries no outline.
    */
-  kind: text('kind', { enum: ['District', 'City', 'Municipality'] })
+  kind: text('kind', { enum: ['District', 'City', 'Municipality', 'Town'] })
     .notNull()
     .default('District'),
   regionId: integer('region_id')

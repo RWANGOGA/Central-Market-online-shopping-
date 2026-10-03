@@ -8,6 +8,9 @@ interface CustomerInfo {
   phone: string;
   region: string;
   district: string;
+  subCounty: string;
+  parish: string;
+  village: string;
   address: string;
 }
 
@@ -204,6 +207,9 @@ export default function ProfilePage({
                         phone: customerInfo.phone,
                         region: customerInfo.region,
                         district: customerInfo.district,
+                        subCounty: customerInfo.subCounty,
+                        parish: customerInfo.parish,
+                        village: customerInfo.village,
                         address: customerInfo.address
                       });
                       setIsEditing(true);

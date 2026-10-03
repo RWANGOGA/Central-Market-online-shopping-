@@ -157,6 +157,9 @@ the cart rather than converting it into an order.
 | --- | --- | --- |
 | `GET` | `/api/geo/hierarchy` | Whole tree, plus per-level counts and whether outlines exist |
 | `GET` | `/api/geo/locate?place=&region=` | Resolve a place name to coordinates |
+| `GET` | `/api/geo/validate?region=&district=` | Check a selection is internally consistent |
+| `GET` | `/api/geo/validate?path=3,17` | Children of one parent, for a cascading select |
+| `POST` | `/api/geo/validate` | Same check for a cascading state object |
 | `GET` | `/api/geo/boundaries/regions` | ADM1 polygons, geoBoundaries gbOpen |
 | `GET` | `/api/geo/boundaries/districts` | ADM2 polygons, geoBoundaries gbOpen |
 | `GET` | `/api/payments/methods` | Channels and providers available in Uganda |
@@ -186,6 +189,34 @@ boundary file.
 ```bash
 npm run db:seed:geo --prefix api    # re-seed regions and districts
 ```
+
+### Hierarchical integrity
+
+A selection must be consistent from the top down: anything chosen at a level
+has to belong to the level above it. Picking Central Region and then a district
+in Northern Region is rejected, not silently corrected, because guessing which
+one the customer meant is how a delivery ends up in the wrong region.
+
+The rule lives in `api/src/lib/geoValidate.ts` as a pure function over the
+hierarchy, so it can be tested at any depth. `src/app/lib/geoApi.ts` carries a
+deliberately identical client copy for immediate feedback; the server is the
+authority and the client copy is a convenience.
+
+Two behaviours are enforced:
+
+  - **A level needs its parent.** A district cannot be matched until a region
+    is fixed, and reports exactly that rather than saying the name is not in
+    Uganda.
+  - **Changing a level clears everything below it** (`clearBelow`). This is the
+    one that matters in the UI: switching from Central to Northern Region must
+    not leave a Central district selected.
+
+Levels may be skipped, because sub-counties and below are not populated yet.
+Naming a level whose parent has none recorded is rejected, so an unverifiable
+place is never accepted.
+
+`POST /api/customers` and `POST /api/orders` both run the check before writing,
+so a hand-crafted request cannot store or route an inconsistent pair.
 
 ### Locating a delivery address
 
