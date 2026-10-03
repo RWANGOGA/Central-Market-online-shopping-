@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import svgPaths from "../imports/svg-42raqsyfh4";
 import footerSvgPaths from "../imports/svg-ved004mhkj";
 import clsx from "clsx";
 import ExpandableCard from './shared/ExpandableCard';
+import StockBadge from './StockBadge';
+import type { StockLevel } from '../lib/stockApi';
 
 interface ProductDetailPageProps {
   product: {
@@ -15,8 +17,12 @@ interface ProductDetailPageProps {
     description: string;
     location: string;
     dietary: string[];
+    unit: string;
   };
   cartCount: number;
+  /** Live stock figure for this product. */
+  stockLevel: StockLevel | null;
+  stockLive: boolean;
   onBack: () => void;
   onAddToCart: (quantity: number) => void;
   onMenuClick: () => void;
@@ -26,6 +32,8 @@ interface ProductDetailPageProps {
 export default function ProductDetailPage({
   product,
   cartCount,
+  stockLevel,
+  stockLive,
   onBack,
   onAddToCart,
   onMenuClick,
@@ -35,14 +43,33 @@ export default function ProductDetailPage({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showQuantityDropdown, setShowQuantityDropdown] = useState(false);
 
+  const soldOut = stockLevel?.state === 'out';
+  const available = stockLevel?.stock ?? 0;
+
+  // A kitchen order can be tens of kilos, so the choices follow what is
+  // actually on hand rather than stopping at ten.
+  const cap = Math.max(1, available);
+  // Common procurement steps, plus every value up to 20 so small orders are
+  // still precise, then whatever larger steps stock actually allows.
+  const steps = Array.from(new Set([
+    ...Array.from({ length: Math.min(cap, 20) }, (_, i) => i + 1),
+    ...[25, 50, 100, 250].filter((n) => n <= cap),
+  ]));
+
   const handleAddToCart = () => {
-    onAddToCart(quantity);
+    if (soldOut) return;
+    onAddToCart(Math.min(quantity, Math.max(1, available)));
   };
 
   const handleQuantitySelect = (newQuantity: number) => {
-    setQuantity(newQuantity);
+    setQuantity(Math.min(newQuantity, Math.max(1, available)));
     setShowQuantityDropdown(false);
   };
+
+  // Never leave the stepper above what can be bought.
+  useEffect(() => {
+    if (quantity > available) setQuantity(Math.max(1, available));
+  }, [available, quantity]);
 
   return (
     <div className="bg-[#ffffff] relative size-full">
@@ -93,6 +120,12 @@ export default function ProductDetailPage({
             <p className="text-[14px] font-['Inter:Regular',_sans-serif] text-[#757575]">
               {product.farm} →
             </p>
+          </div>
+
+          {/* Stock. Placed directly under the price because a buyer deciding
+              between suppliers needs the figure before anything else. */}
+          <div className="border border-neutral-200 rounded-xl p-3.5 bg-[#fbfbfb]">
+            <StockBadge level={stockLevel} variant="block" stale={!stockLive} />
           </div>
           
           {/* Description */}
@@ -145,7 +178,7 @@ export default function ProductDetailPage({
                     >
                       <div className="flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic relative shrink-0 text-[#000000] text-[16px] text-left text-nowrap tracking-[-0.16px]">
                         <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">
-                          {quantity}
+                          {quantity} {product.unit}
                         </p>
                       </div>
                       <div className="flex h-[4px] items-center justify-center relative shrink-0 w-[7px]">
@@ -175,13 +208,17 @@ export default function ProductDetailPage({
               {/* Dropdown Menu */}
               {showQuantityDropdown && (
                 <div className="absolute bottom-full left-0 right-0 bg-white border border-neutral-200 rounded-lg mb-1 max-h-48 overflow-y-auto z-50">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  {steps.map((num) => (
                     <button
                       key={num}
                       onClick={() => handleQuantitySelect(num)}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-50 font-['Inter:Regular',_sans-serif] text-[14px] text-[#000000] font-normal"
+                      className={`w-full px-4 py-2 text-left font-['Inter:Regular',_sans-serif] text-[14px] font-normal ${
+                        num === quantity
+                          ? 'bg-[#426b1f]/8 text-[#426b1f] font-medium'
+                          : 'hover:bg-gray-50 text-[#000000]'
+                      }`}
                     >
-                      {num}
+                      {num} {product.unit}
                     </button>
                   ))}
                 </div>
@@ -189,14 +226,19 @@ export default function ProductDetailPage({
             </div>
             
             {/* Add to Basket Button */}
-            <div className="basis-0 bg-[#426b1f] grow min-h-px min-w-px relative rounded-lg shrink-0">
+            <div className={`basis-0 grow min-h-px min-w-px relative rounded-lg shrink-0 ${soldOut ? 'bg-neutral-200' : 'bg-[#426b1f]'}`}>
               <button
                 onClick={handleAddToCart}
-                className="flex flex-row items-center relative size-full"
+                disabled={soldOut}
+                className={`flex flex-row items-center relative size-full rounded-lg ${
+                  soldOut ? 'cursor-not-allowed' : ''
+                }`}
               >
                 <div className="box-border content-stretch flex flex-row gap-2 items-center justify-start pl-6 pr-4 py-2 relative w-full">
-                  <div className="basis-0 flex flex-col font-['Inter:Regular',_sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px not-italic relative shrink-0 text-[#ffffff] text-[16px] text-left tracking-[-0.16px]">
-                    <p className="block leading-[24px] text-[14px]">Add to basket</p>
+                  <div className="basis-0 flex flex-col font-['Inter:Regular',_sans-serif] font-normal grow justify-center leading-[0] min-h-px min-w-px not-italic relative shrink-0 text-[16px] text-left tracking-[-0.16px]">
+                    <p className={`block leading-[24px] text-[14px] ${soldOut ? 'text-[#9a9a9a]' : 'text-[#ffffff]'}`}>
+                      {soldOut ? 'Sold out' : `Add ${quantity} ${product.unit} to basket`}
+                    </p>
                   </div>
                   <div className="relative shrink-0 size-8">
                     <svg

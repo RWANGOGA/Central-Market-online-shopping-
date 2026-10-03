@@ -25,6 +25,7 @@ import AddToCartOverlay from './components/AddToCartOverlay';
 import Menu from './components/Menu';
 import MapPage from './components/MapPage';
 import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './lib/cartApi';
+import { fetchStock, applyStockDelta, type StockLevel } from './lib/stockApi';
 
 // Enhanced product data with descriptions and locations
 const PRODUCTS = [
@@ -33,6 +34,8 @@ const PRODUCTS = [
     name: "Garlic clove",
     price: "USh 3,524 each",
     priceValue: 3524,
+    stock: 120,
+    unit: 'each',
     farm: "Bukalasi Farm",
     images: [imgRectangle6538, imgRectangle6539],
     isFavorite: false,
@@ -43,8 +46,10 @@ const PRODUCTS = [
   {
     id: 2,
     name: "Sugar snap pea",
-    price: "USh 9,068/lb",
-    priceValue: 9068,
+    price: "USh 19,992/kg",
+    priceValue: 19992,
+    stock: 36,
+    unit: 'kg',
     farm: "Rwambari Farm",
     images: [imgRectangle6540, imgRectangle6539],
     isFavorite: false,
@@ -55,8 +60,10 @@ const PRODUCTS = [
   {
     id: 3,
     name: "Ginger",
-    price: "USh 16,632/lb",
-    priceValue: 16632,
+    price: "USh 36,667/kg",
+    priceValue: 36667,
+    stock: 27,
+    unit: 'kg',
     farm: "Bungokho Farm",
     images: [imgRectangle6541],
     isFavorite: false,
@@ -67,8 +74,10 @@ const PRODUCTS = [
   {
     id: 4,
     name: "Sweet onion",
-    price: "USh 1,544/lb",
-    priceValue: 1544,
+    price: "USh 3,404/kg",
+    priceValue: 3404,
+    stock: 91,
+    unit: 'kg',
     farm: "Kyarakora Farm",
     images: [imgRectangle6542],
     isFavorite: false,
@@ -81,6 +90,8 @@ const PRODUCTS = [
     name: "Raspberries",
     price: "USh 15,800 pint",
     priceValue: 15800,
+    stock: 45,
+    unit: 'pint',
     farm: "Ngarama Farm",
     images: [imgRectangle6543],
     isFavorite: false,
@@ -91,8 +102,10 @@ const PRODUCTS = [
   {
     id: 6,
     name: "Bananas",
-    price: "USh 2,534/lb",
-    priceValue: 2534,
+    price: "USh 5,587/kg",
+    priceValue: 5587,
+    stock: 136,
+    unit: 'kg',
     farm: "Rwekubo Farm",
     images: [imgRectangle6544],
     isFavorite: false,
@@ -105,6 +118,8 @@ const PRODUCTS = [
     name: "Avocados",
     price: "USh 4,158 each",
     priceValue: 4158,
+    stock: 90,
+    unit: 'each',
     farm: "Najjera Farm",
     images: [imgRectangle6545],
     isFavorite: false,
@@ -117,6 +132,8 @@ const PRODUCTS = [
     name: "Kale",
     price: "USh 7,880 each",
     priceValue: 7880,
+    stock: 75,
+    unit: 'each',
     farm: "Kawolo Farm",
     images: [imgRectangle6546],
     isFavorite: false,
@@ -129,6 +146,8 @@ const PRODUCTS = [
     name: "Radish",
     price: "USh 5,108 each",
     priceValue: 5108,
+    stock: 110,
+    unit: 'each',
     farm: "Nkolokoto Farm",
     images: [imgRectangle6547],
     isFavorite: false,
@@ -137,6 +156,9 @@ const PRODUCTS = [
     dietary: ["VG", "GF", "DF"]
   }
 ];
+
+/** How often the catalogue re-reads stock from the inventory service. */
+const STOCK_POLL_MS = 30_000;
 
 type SortOption = 'default' | 'a-z' | 'price';
 type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile' | 'map';
@@ -148,6 +170,8 @@ interface CartItem {
   priceValue: number;
   image: string;
   quantity: number;
+  /** Sale unit, so a basket line reads "3 kg" and not a bare number. */
+  unit: string;
 }
 
 interface OverlayProduct {
@@ -181,6 +205,7 @@ function buildCartItem(product: (typeof PRODUCTS)[number], quantity: number): Ca
     priceValue: product.priceValue,
     image: product.images[0],
     quantity,
+    unit: product.unit,
   };
 }
 
@@ -213,7 +238,43 @@ export default function App() {
   // Server cart. Null means the API is not running and the cart stays local.
   const cartIdRef = useRef<number | null>(null);
 
+  // Live stock, keyed by product id. Empty means the inventory service has not
+  // answered yet or is unreachable, and the UI says which.
+  const [stockLevels, setStockLevels] = useState<Map<number, StockLevel>>(new Map());
+  const [stockLive, setStockLive] = useState(false);
+
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Poll stock so the figures stay current without a manual refresh. A buyer
+  // planning an order needs this to be live, not a number frozen at build time.
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      const result = await fetchStock();
+      if (cancelled) return;
+      if (result) {
+        setStockLevels(result.levels);
+        setStockLive(true);
+      }
+    };
+
+    load();
+    const timer = window.setInterval(load, STOCK_POLL_MS);
+
+    // Re-check when the tab comes back, since a backgrounded tab stops timers
+    // and the figures would otherwise be stale on return.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   // Restore the cart on load so a refresh does not empty the basket.
   useEffect(() => {
@@ -392,6 +453,17 @@ export default function App() {
   const handleCompletePurchase = () => {
     // Show order confirmation and clear cart
     setViewMode('orderConfirmation');
+
+    // Reflect the sale immediately rather than waiting for the next poll, so
+    // the basket and the stock figures agree on screen straight away.
+    setStockLevels((current) => {
+      let next = current;
+      for (const item of cartItems) {
+        next = applyStockDelta(next, item.id, item.quantity);
+      }
+      return next;
+    });
+
     setCartItems([]);
 
     // Empty the server cart and start a fresh one, so a reload after
@@ -443,6 +515,8 @@ export default function App() {
             onProductClick={handleProductClick}
             onMenuClick={() => setIsNavOpen(true)}
             onCartClick={handleCartClick}
+            stockLevels={stockLevels}
+            stockLive={stockLive}
           />
         );
       
@@ -451,6 +525,8 @@ export default function App() {
           <ProductDetailPage
             product={selectedProduct}
             cartCount={cartCount}
+            stockLevel={stockLevels.get(selectedProduct.id) ?? null}
+            stockLive={stockLive}
             onBack={handleBackToList}
             onAddToCart={(quantity) => addToCart(undefined, quantity)}
             onMenuClick={() => setIsNavOpen(true)}

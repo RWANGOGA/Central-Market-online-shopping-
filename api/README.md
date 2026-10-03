@@ -155,6 +155,10 @@ the cart rather than converting it into an order.
 
 | Method | Path | Notes |
 | --- | --- | --- |
+| `GET` | `/api/inventory` | Live stock per product, with unit and state |
+| `GET` | `/api/inventory?lowStock=true` | Only what is low or out |
+| `GET` | `/api/inventory?summary=true` | Counts by state, for a dashboard |
+| `PATCH` | `/api/inventory` | Adjust stock: `{ productId, delta, reason }` |
 | `GET` | `/api/geo/hierarchy` | Whole tree, plus per-level counts and whether outlines exist |
 | `GET` | `/api/geo/locate?place=&region=` | Resolve a place name to coordinates |
 | `GET` | `/api/geo/validate?region=&district=` | Check a selection is internally consistent |

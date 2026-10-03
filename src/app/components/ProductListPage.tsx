@@ -4,6 +4,8 @@ import svgPaths from "../imports/svg-s5y93igtx2";
 import clsx from "clsx";
 import { Input } from './ui/input';
 import ExpandableCard from './shared/ExpandableCard';
+import StockBadge from './StockBadge';
+import type { StockLevel } from '../lib/stockApi';
 
 interface Product {
   id: number;
@@ -16,6 +18,9 @@ interface Product {
   description: string;
   location: string;
   dietary: string[];
+  /** Live stock figure, replaced by the inventory service when reachable. */
+  stock: number;
+  unit: string;
 }
 
 type SortOption = 'default' | 'a-z' | 'price';
@@ -33,6 +38,8 @@ interface ProductListPageProps {
   onProductClick: (product: Product) => void;
   onMenuClick: () => void;
   onCartClick: () => void;
+  stockLevels: Map<number, StockLevel>;
+  stockLive: boolean;
 }
 
 export default function ProductListPage({
@@ -47,7 +54,9 @@ export default function ProductListPage({
   onAddToCart,
   onProductClick,
   onMenuClick,
-  onCartClick
+  onCartClick,
+  stockLevels,
+  stockLive
 }: ProductListPageProps) {
   return (
     <div className="bg-[#ffffff] relative size-full">
@@ -72,6 +81,8 @@ export default function ProductListPage({
         onToggleFavorite={onToggleFavorite}
         onAddToCart={onAddToCart}
         onProductClick={onProductClick}
+        stockLevels={stockLevels}
+        stockLive={stockLive}
       />
     </div>
   );
@@ -245,9 +256,11 @@ interface ContentProps {
   onToggleFavorite: (productId: number) => void;
   onAddToCart: (productId: number) => void;
   onProductClick: (product: Product) => void;
+  stockLevels: Map<number, StockLevel>;
+  stockLive: boolean;
 }
 
-function Content({ products, favorites, onToggleFavorite, onAddToCart, onProductClick }: ContentProps) {
+function Content({ products, favorites, onToggleFavorite, onAddToCart, onProductClick, stockLevels, stockLive }: ContentProps) {
   return (
     <div className="absolute left-0 right-0 top-[225px] bottom-4 overflow-y-auto">
       <div className="box-border content-stretch flex flex-col gap-4 items-start justify-start relative w-full px-6 py-3">
@@ -259,6 +272,8 @@ function Content({ products, favorites, onToggleFavorite, onAddToCart, onProduct
             onToggleFavorite={() => onToggleFavorite(product.id)}
             onAddToCart={() => onAddToCart(product.id)}
             onClick={() => onProductClick(product)}
+            stockLevel={stockLevels.get(product.id) ?? null}
+            stockLive={stockLive}
           />
         ))}
       </div>
@@ -272,9 +287,16 @@ interface ProductCardProps {
   onToggleFavorite: () => void;
   onAddToCart: () => void;
   onClick: () => void;
+  stockLevel: StockLevel | null;
+  stockLive: boolean;
 }
 
-function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart, onClick }: ProductCardProps) {
+function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart, onClick, stockLevel, stockLive }: ProductCardProps) {
+  // Sold out means the add button is pointless, so it is disabled rather than
+  // left to fail later at payment.
+  const soldOut = stockLevel?.state === 'out';
+  const lowStock = stockLevel?.state === 'low';
+
   return (
     <div className="bg-[#ffffff] relative shadow-[0px_0px_20px_0px_rgba(0,0,0,0.1)] shrink-0 w-full rounded-[12px]">
       <div className="box-border content-stretch flex flex-row items-start justify-start overflow-clip p-0 relative w-full">
@@ -305,6 +327,9 @@ function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart, onCli
                   </div>
                   <div className="css-415rgs relative shrink-0 text-[#757575] text-[12px] text-nowrap">
                     <p className="block leading-[1.6] whitespace-pre text-[12px]">{product.farm} →</p>
+                  </div>
+                  <div className="pt-0.5">
+                    <StockBadge level={stockLevel} stale={!stockLive} />
                   </div>
                   <ExpandableCard
                     className="w-full"
@@ -352,15 +377,24 @@ function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart, onCli
           <HeartIcon filled={isFavorite} />
         </button>
         
-        {/* Add to Cart Button */}
+        {/* Add to Cart Button. Disabled when sold out, because the order would
+            only be refused at payment. */}
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onAddToCart();
+            if (!soldOut) onAddToCart();
           }}
-          className="absolute bg-[#426b1f] bottom-2 right-2 rounded-lg size-8 flex items-center justify-center"
+          disabled={soldOut}
+          aria-label={soldOut ? `${product.name} is sold out` : `Add ${product.name} to basket`}
+          className={`absolute bottom-2 right-2 rounded-lg size-8 flex items-center justify-center ${
+            soldOut
+              ? 'bg-neutral-200 cursor-not-allowed'
+              : lowStock
+                ? 'bg-[#b07d2b] hover:bg-[#96691f]'
+                : 'bg-[#426b1f] hover:bg-[#355214]'
+          }`}
         >
-          <PlusIcon />
+          {soldOut ? <SoldOutIcon /> : <PlusIcon />}
         </button>
       </div>
     </div>
@@ -399,6 +433,17 @@ function HeartIcon({ filled }: { filled: boolean }) {
             </>
           )}
         </g>
+      </svg>
+    </div>
+  );
+}
+
+function SoldOutIcon() {
+  return (
+    <div className="size-8 flex items-center justify-center">
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" aria-hidden="true">
+        <line stroke="#9a9a9a" strokeWidth="1.75" strokeLinecap="round" x1="4" y1="4" x2="12" y2="12" />
+        <line stroke="#9a9a9a" strokeWidth="1.75" strokeLinecap="round" x1="12" y1="4" x2="4" y2="12" />
       </svg>
     </div>
   );

@@ -11,6 +11,7 @@ interface CartItem {
   priceValue: number;
   image: string;
   quantity: number;
+  unit: string;
 }
 
 interface BasketPageProps {
@@ -315,7 +316,13 @@ function ProductItem({ item, onUpdateQuantity }: ProductItemProps) {
       {/* Product Name and Price */}
       <div className="absolute flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] left-[86px] not-italic text-[#000000] text-[14px] text-left top-4 translate-y-[-50%] w-[173px]">
         <p className="leading-[16px]">
-          <span className="text-[#000000]">{item.name}</span>
+          <span className="text-[#000000]">
+            {item.name}
+            <span className="text-[#757575]">
+              {' '}
+              &middot; {item.quantity} {item.unit}
+            </span>
+          </span>
           <span>
             <br />
           </span>
