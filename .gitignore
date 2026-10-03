@@ -18,6 +18,9 @@ local.db-shm
 .env.local
 .env*.local
 
+# Admin-uploaded product images (runtime content, not source)
+api/data/uploads/
+
 # Logs
 *.log
 npm-debug.log*

@@ -248,6 +248,58 @@ export const payments = sqliteTable('payments', {
     .default(sql`(datetime('now'))`),
 });
 
+/**
+ * Staff accounts. Separate from customers: an admin can change the catalogue
+ * and adjust stock, so the credential is stored apart and never returned by
+ * any endpoint.
+ *
+ * The first account is seeded from ADMIN_EMAIL and ADMIN_PASSWORD in the
+ * environment. No credential is committed to the repository.
+ */
+export const admins = sqliteTable('admins', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role', { enum: ['owner', 'manager'] }).notNull().default('manager'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  lastLoginAt: text('last_login_at'),
+});
+
+/**
+ * An opaque session. The token itself is never stored, only its SHA-256, so a
+ * database copy cannot be used to sign in.
+ */
+export const adminSessions = sqliteTable('admin_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  adminId: integer('admin_id')
+    .notNull()
+    .references(() => admins.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  userAgent: text('user_agent'),
+});
+
+/**
+ * Failed sign-in attempts, used to slow down password guessing. Kept in the
+ * database rather than in memory so a restart does not hand an attacker a fresh
+ * allowance.
+ */
+export const adminLoginAttempts = sqliteTable('admin_login_attempts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull(),
+  succeeded: integer('succeeded', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
@@ -263,3 +315,6 @@ export type Parish = typeof parishes.$inferSelect;
 export type Village = typeof villages.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
+export type Admin = typeof admins.$inferSelect;
+export type AdminSession = typeof adminSessions.$inferSelect;
+export type AdminLoginAttempt = typeof adminLoginAttempts.$inferSelect;

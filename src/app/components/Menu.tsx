@@ -68,6 +68,7 @@ function MenuItems({ onNavigate }: MenuItemsProps) {
   const menuItems = [
     { label: "Shop", screen: "list" },
     { label: "Coverage map", screen: "map" },
+    { label: "Staff", screen: "admin" },
     { label: "Newsstand", screen: "newsstand" },
     { label: "Who we are", screen: "about" },
     { label: "My Profile", screen: "profile" },

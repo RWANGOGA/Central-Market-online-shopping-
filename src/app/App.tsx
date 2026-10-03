@@ -24,11 +24,18 @@ import ProfilePage from './components/ProfilePage';
 import AddToCartOverlay from './components/AddToCartOverlay';
 import Menu from './components/Menu';
 import MapPage from './components/MapPage';
+import AdminPage from './components/AdminPage';
 import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './lib/cartApi';
 import { fetchStock, applyStockDelta, type StockLevel } from './lib/stockApi';
+import { useCatalogue, type CatalogueProduct } from './lib/catalogue';
 
 // Enhanced product data with descriptions and locations
-const PRODUCTS = [
+/**
+ * The compiled-in catalogue. Used as the shop's fallback when the API cannot be
+ * reached, and as the source an admin's additions are merged into. The live
+ * catalogue comes from /api/products so an admin can add products at runtime.
+ */
+const FALLBACK_CATALOGUE: CatalogueProduct[] = [
   {
     id: 1,
     name: "Garlic clove",
@@ -161,7 +168,7 @@ const PRODUCTS = [
 const STOCK_POLL_MS = 30_000;
 
 type SortOption = 'default' | 'a-z' | 'price';
-type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile' | 'map';
+type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile' | 'map' | 'admin';
 
 interface CartItem {
   id: number;
@@ -197,7 +204,7 @@ interface CustomerInfo {
  * from a tap or from the API on reload, so the basket always renders with the
  * same name, price and image as the product list.
  */
-function buildCartItem(product: (typeof PRODUCTS)[number], quantity: number): CartItem {
+function buildCartItem(product: CatalogueProduct, quantity: number): CartItem {
   return {
     id: product.id,
     name: product.name,
@@ -216,7 +223,7 @@ export default function App() {
   const [sortOption, setSortOption] = useState<SortOption>('default');
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedProduct, setSelectedProduct] = useState<typeof PRODUCTS[0] | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<CatalogueProduct | null>(null);
   
   // Customer information from checkout
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
@@ -242,6 +249,10 @@ export default function App() {
   // answered yet or is unreachable, and the UI says which.
   const [stockLevels, setStockLevels] = useState<Map<number, StockLevel>>(new Map());
   const [stockLive, setStockLive] = useState(false);
+
+  // The shop reads the catalogue from the API so an admin's additions appear.
+  // FALLBACK_CATALOGUE keeps the seeded nine on screen if the API is down.
+  const { products, live: catalogueLive, refresh: refreshCatalogue } = useCatalogue(FALLBACK_CATALOGUE);
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -294,7 +305,7 @@ export default function App() {
       // stay identical to the rest of the app. Server-only products are
       // skipped rather than rendered half-populated.
       const restored = cart.items.flatMap((line) => {
-        const product = PRODUCTS.find((p) => p.id === line.productId);
+        const product = products.find((p) => p.id === line.productId);
         return product ? [buildCartItem(product, line.quantity)] : [];
       });
 
@@ -307,7 +318,7 @@ export default function App() {
   }, []);
 
   const filteredAndSortedProducts = useMemo(() => {
-    let filtered = PRODUCTS.filter(product =>
+    let filtered = products.filter(product =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -319,7 +330,7 @@ export default function App() {
       default:
         return filtered;
     }
-  }, [searchTerm, sortOption]);
+  }, [searchTerm, sortOption, products]);
 
   const toggleFavorite = (productId: number) => {
     const newFavorites = new Set(favorites);
@@ -331,7 +342,7 @@ export default function App() {
     setFavorites(newFavorites);
   };
 
-  const showAddToCartOverlay = (product: typeof PRODUCTS[0], quantity = 1) => {
+  const showAddToCartOverlay = (product: CatalogueProduct, quantity = 1) => {
     setOverlayProduct({
       id: product.id,
       name: product.name,
@@ -350,7 +361,7 @@ export default function App() {
     let targetProduct;
     
     if (productId) {
-      targetProduct = PRODUCTS.find(p => p.id === productId);
+      targetProduct = products.find(p => p.id === productId);
     } else if (selectedProduct) {
       targetProduct = selectedProduct;
     }
@@ -407,7 +418,7 @@ export default function App() {
   };
 
   // Navigation handlers
-  const handleProductClick = (product: typeof PRODUCTS[0]) => {
+  const handleProductClick = (product: CatalogueProduct) => {
     setSelectedProduct(product);
     setViewMode('detail');
   };
@@ -567,6 +578,9 @@ export default function App() {
             onProceedToConfirmation={handleProceedToConfirmation}
           />
         );
+
+      case 'admin':
+        return <AdminPage onClose={() => setViewMode('list')} />;
 
       case 'map':
         return (

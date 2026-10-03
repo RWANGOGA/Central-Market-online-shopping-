@@ -155,6 +155,13 @@ the cart rather than converting it into an order.
 
 | Method | Path | Notes |
 | --- | --- | --- |
+| `POST` | `/api/admin/login` | Start a session, sets an HttpOnly cookie |
+| `POST` | `/api/admin/logout` | End the session |
+| `GET` | `/api/admin/me` | Who am I, or 401 |
+| `GET` | `/api/admin/products` | Full catalogue including withdrawn rows |
+| `POST` | `/api/admin/products` | Add a product, optionally with an image |
+| `PATCH` | `/api/admin/products/:idOrSlug` | Edit fields, price, unit or stock |
+| `DELETE` | `/api/admin/products/:idOrSlug` | Withdraw, keeping the row |
 | `GET` | `/api/inventory` | Live stock per product, with unit and state |
 | `GET` | `/api/inventory?lowStock=true` | Only what is low or out |
 | `GET` | `/api/inventory?summary=true` | Counts by state, for a dashboard |
@@ -269,6 +276,58 @@ provider of your choice (Paystack and Flutterwave both support Uganda mobile
 money) behind `api/src/lib/payments.ts`, and replace the client-side settle with
 a webhook. Nothing else needs to move: the response shape the client already
 consumes is what a webhook would produce.
+
+## Staff accounts
+
+Admin routes require a session. There is no default account and no credential
+in the repository.
+
+```bash
+# add to api/.env.local, which is gitignored
+ADMIN_EMAIL=you@market.ug
+ADMIN_PASSWORD=a-password-of-at-least-10-characters
+ADMIN_NAME=Your Name        # optional
+
+npm run db:seed:admin --prefix api
+```
+
+The script refuses to run without a password of at least ten characters, and
+prints those instructions rather than creating anything if the variables are
+missing.
+
+**How the session works.** Passwords are hashed with scrypt from node:crypto,
+chosen over bcrypt or argon2 because it needs no native module and so cannot
+break the install on a new machine. The cost parameters are stored inside the
+hash, so they can be raised later without invalidating existing passwords.
+
+Sign-in returns an opaque 256-bit token in an HttpOnly, SameSite=Strict cookie.
+Only the token's SHA-256 is stored, so a copy of the database cannot be
+replayed as a live session. A JWT was deliberately not used, because a signed
+token cannot be revoked before it expires and a staff session should be
+killable at once.
+
+Two details that stop account enumeration: an unknown email still pays the cost
+of a scrypt verification, and the failure message is identical whether the
+address is unknown or the password is wrong. Eight failures for one address
+inside fifteen minutes returns 429, tracked in the database so a restart does
+not hand an attacker a fresh allowance.
+
+**Existing products are never at risk.** Adding a product is an insert; editing
+is a targeted update by id; removing is a soft delete that flips `active`.
+Nothing here truncates or replaces the table. The row is retained on purpose
+because `order_items` references products, and a hard delete would either
+break those references or quietly rewrite what a past order said it contained.
+A withdrawn product can be restored with PATCH `{ "active": true }`, and
+admins can still see withdrawn products in order to restore them.
+
+Price and its label are written together, so changing `priceValue` or `unit`
+rewrites `priceLabel` in the same statement and the two cannot drift apart.
+
+Images are uploaded as a base64 data URL, limited to 5 MB and to PNG, JPEG,
+WebP, AVIF or SVG. The stored filename is generated rather than taken from the
+client, so a crafted name cannot escape the uploads directory, and
+`/api/assets/uploads/<file>` serves them through the same route that serves the
+frontend bundle's images.
 
 ## Design notes
 

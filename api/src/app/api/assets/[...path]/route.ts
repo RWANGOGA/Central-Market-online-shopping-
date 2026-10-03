@@ -2,12 +2,19 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import { UPLOAD_ROOT } from '@/lib/uploads';
 
 const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.svg', '.avif']);
 
 /**
- * Serves product imagery straight out of the frontend's src/assets folder so
- * there is a single source of truth and no 37MB copy inside the API.
+ * Serves product imagery from two places:
+ *
+ *   uploads/<file>   images an admin added through the catalogue editor
+ *   <file>           the frontend's bundled src/assets, so there is a single
+ *                    copy rather than a duplicate inside the API
+ *
+ * Uploads are checked first. Both roots are resolved and then prefix-checked,
+ * so neither a "uploads/../" segment nor an absolute path can escape them.
  */
 export async function GET(
   _request: Request,
@@ -15,36 +22,53 @@ export async function GET(
 ) {
   const { path: segments } = await params;
 
-  const assetRoot = path.resolve(process.cwd(), '..', 'src', 'assets');
-  const requested = path.resolve(assetRoot, segments.join('/'));
-
-  if (!requested.startsWith(assetRoot + path.sep)) {
-    return new Response('Forbidden', { status: 403 });
+  if (segments.length === 0 || segments.some((segment) => segment === '' || segment === '.')) {
+    return new Response('Not found', { status: 404 });
   }
 
-  const extension = path.extname(requested).toLowerCase();
+  const relative = segments.join('/');
+  const requested = relative.startsWith('uploads/')
+    ? path.resolve(UPLOAD_ROOT, relative.slice('uploads/'.length))
+    : null;
+
+  const bundledRoot = path.resolve(process.cwd(), '..', 'src', 'assets');
+  const bundled = requested === null ? path.resolve(bundledRoot, relative) : null;
+
+  const extension = path.extname(relative).toLowerCase();
   if (!ALLOWED_EXTENSIONS.has(extension)) {
     return new Response('Unsupported media type', { status: 415 });
   }
 
-  let fileStat: Awaited<ReturnType<typeof stat>>;
-  try {
-    fileStat = await stat(requested);
-  } catch {
-    return new Response('Not found', { status: 404 });
+  const candidates: { file: string; root: string }[] = [];
+  if (requested !== null) candidates.push({ file: requested, root: UPLOAD_ROOT });
+  if (bundled !== null) candidates.push({ file: bundled, root: bundledRoot });
+
+  for (const candidate of candidates) {
+    if (!candidate.file.startsWith(candidate.root + path.sep)) continue;
+
+    let fileStat: Awaited<ReturnType<typeof stat>>;
+    try {
+      fileStat = await stat(candidate.file);
+    } catch {
+      continue;
+    }
+
+    if (!fileStat.isFile()) continue;
+
+    const stream = Readable.toWeb(createReadStream(candidate.file)) as ReadableStream;
+
+    return new Response(stream, {
+      headers: {
+        'content-type': mimeFor(extension),
+        'content-length': String(fileStat.size),
+        // Uploaded names carry a timestamp, so a replaced image is a new URL
+        // and the cached copy cannot go stale.
+        'cache-control': 'public, max-age=31536000, immutable',
+      },
+    });
   }
 
-  if (!fileStat.isFile()) return new Response('Not found', { status: 404 });
-
-  const stream = Readable.toWeb(createReadStream(requested)) as ReadableStream;
-
-  return new Response(stream, {
-    headers: {
-      'content-type': mimeFor(extension),
-      'content-length': String(fileStat.size),
-      'cache-control': 'public, max-age=31536000, immutable',
-    },
-  });
+  return new Response('Not found', { status: 404 });
 }
 
 function mimeFor(extension: string) {
