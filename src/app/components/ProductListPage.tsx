@@ -3,6 +3,7 @@ import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import clsx from "clsx";
 import { Input } from './ui/input';
+import ExpandableCard from './shared/ExpandableCard';
 
 interface Product {
   id: number;
@@ -305,6 +306,35 @@ function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart, onCli
                   <div className="css-415rgs relative shrink-0 text-[#757575] text-[12px] text-nowrap">
                     <p className="block leading-[1.6] whitespace-pre text-[12px]">{product.farm} →</p>
                   </div>
+                  <ExpandableCard
+                    className="w-full"
+                    expandLabel="More"
+                    preview={
+                      <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575] leading-[16px] line-clamp-2">
+                        {product.description}
+                      </p>
+                    }
+                    detail={
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#000000] leading-[16px]">
+                          {product.description}
+                        </p>
+                        <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575] leading-[16px]">
+                          {product.location}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {product.dietary.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-[10px] font-medium text-[#426b1f] bg-[#426b1f]/10 border border-[#426b1f]/20 rounded px-1.5 py-0.5"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    }
+                  />
                 </div>
               </div>
             </div>

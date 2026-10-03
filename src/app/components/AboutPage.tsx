@@ -1,5 +1,6 @@
 import React from 'react';
 import StatusBar from './shared/StatusBar';
+import ExpandableCard from './shared/ExpandableCard';
 import svgPaths from "../imports/svg-s5y93igtx2";
 
 interface AboutPageProps {
@@ -9,32 +10,64 @@ interface AboutPageProps {
   cartCount: number;
 }
 
+/**
+ * Commitments rather than achievements. The figures are real, published
+ * Uganda numbers, each labelled with what it actually measures, because the
+ * alternative is inventing corporate claims we cannot stand behind.
+ */
 const VALUES = [
   {
-    title: "Direct from the Soil",
-    description: "Every item in our catalogue is sourced directly from independent growers within 200 miles of your doorstep, bypassing long distribution hubs.",
-    stat: "100%",
-    statLabel: "Direct Sourced"
+    title: 'Farm-Gate Transparency',
+    description:
+      'We show the farm-gate reference beside our shelf price, so the gap between what a grower earns and what you pay is visible instead of buried. Uganda shipped 737,766 bags of coffee in August, 13.6% fewer than a year earlier, and firmer prices kept farmer earnings from falling as far as volume did.',
+    stat: 'Shs5,750',
+    statLabel: 'Farm-gate robusta kiboko, per kg, Aug 2026',
   },
   {
-    title: "Fair Grower Compensation",
-    description: "We guarantee transparent pricing where growers receive an average of 72 cents on every dollar spent, versus the conventional supermarket average of 14 cents.",
-    stat: "72¢",
-    statLabel: "Per Dollar to Farms"
+    title: 'Built Around the Dry Spell',
+    description:
+      'Prolonged drought and unusually high temperatures hit flowering and bean filling in Greater Masaka, Kyotera, Sembabule and Luwero, leaving the out-turn about 10% below normal in those areas. We favour growers and districts investing in irrigation rather than depending on rain-fed supply alone.',
+    stat: '1.5m ha',
+    statLabel: 'National irrigated land target by 2040',
   },
   {
-    title: "Zero Waste Packaging",
-    description: "All produce boxes are packed with 100% post-consumer unbleached fiber and compostable moisture barriers made from renewable plant starches.",
-    stat: "0",
-    statLabel: "Virgin Plastics"
+    title: 'Buying Into the Market Trade',
+    description:
+      "Kampala's central markets still move most of the fresh produce sold in the city, and KCCA runs 17 of them under the Markets Act. We buy into that trade rather than routing around it, so the traders you meet at Owino, Kisementi and Nakivubo keep their margin.",
+    stat: '550',
+    statLabel: 'Vacant spaces in KCCA-run markets, Sep 2026',
   }
 ];
 
-const FARMS = [
-  { name: "Kunisaki Farms", location: "Gilroy, CA", specialty: "Organic garlic, brassicas & root herbs" },
-  { name: "Helmbolt Orchards", location: "Salinas Valley, CA", specialty: "Snap peas, stone fruits & berries" },
-  { name: "Bui Farms", location: "Hawaii & Central Coast", specialty: "Ginger root, turmeric & baby greens" },
-  { name: "Castelao Farms", location: "Vidalia, GA", specialty: "Heirloom sweet alliums & winter squash" }
+const REGIONS = [
+  {
+    name: 'Kampala & Wakiso',
+    location: 'Central Region',
+    specialty: 'Fresh produce moving through Owino, Kisementi and Nakivubo',
+    detail:
+      'The central region supplies the city daily. Traders here have coped with flooding, rising rents and enforcement drives, and KCCA has said 550 spaces sit vacant across Wandegeya, Rusafi, Nakawa and Luzira while new vendors are turned away.',
+  },
+  {
+    name: 'Masaka & Sembabule',
+    location: 'Southern Region',
+    specialty: 'Maize, Robusta coffee, and the districts hit hardest by drought',
+    detail:
+      'Greater Masaka, Kyotera and Sembabule were named directly in this season’s drought reporting, with flowering, cherry development and bean filling all affected. Irrigated smallholders in districts like Agago have kept harvesting while their neighbours could not.',
+  },
+  {
+    name: 'Mbarara & Bushenyi',
+    location: 'Western Region',
+    specialty: 'Bananas, tea and smallholder dairy',
+    detail:
+      'Kagadi’s tea growers were among the first to receive this season’s organic mineral fertiliser allocations, distributed at the Muzizi estate. Kagadi records tea as one of the district’s leading export crops.',
+  },
+  {
+    name: 'Mbale & Tororo',
+    location: 'Eastern Region',
+    specialty: 'Soybean, groundnuts and the oilseed belt',
+    detail:
+      'The eastern oilseed belt is where Uganda’s crushing shortfall bites hardest. Processors have been paying strong farm-gate prices and still cannot fill capacity, which is a supply problem rather than a demand one.',
+  }
 ];
 
 export default function AboutPage({ onBack, onMenuClick, onCartClick, cartCount }: AboutPageProps) {
@@ -131,63 +164,129 @@ export default function AboutPage({ onBack, onMenuClick, onCartClick, cartCount 
       <div className="absolute left-0 right-0 top-[149px] bottom-0 overflow-y-auto">
         <div className="px-6 pt-6 pb-10 space-y-6">
           {/* Mission Statement Hero */}
-          <div className="border border-[#426b1f]/20 bg-[#426b1f]/5 rounded-2xl p-5 space-y-3">
-            <span className="text-[11px] font-semibold text-[#426b1f] uppercase tracking-wider">Our Mission</span>
-            <h2 className="font-['Newsreader:Regular',_sans-serif] text-[22px] text-[#000000] leading-[28px]">
-              Rebuilding community food systems from the ground up.
-            </h2>
-            <p className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] leading-[22px]">
-              "Mu Katale" began with a simple question: why do grocery tomatoes travel 1,500 miles when flavorful heritage varieties grow in neighboring valleys? We partner directly with organic family farms to harvest when ripe, not when hard.
-            </p>
-          </div>
+          <ExpandableCard
+            className="border border-[#426b1f]/20 bg-[#426b1f]/5 rounded-2xl p-5"
+            expandLabel="Read our story"
+            preview={
+              <div className="space-y-3">
+                <span className="text-[11px] font-semibold text-[#426b1f] uppercase tracking-wider">
+                  Our Mission
+                </span>
+                <h2 className="font-['Newsreader:Regular',_sans-serif] text-[22px] text-[#000000] leading-[28px]">
+                  Getting Ugandan produce from the farm to the market without losing the farmer.
+                </h2>
+                <p className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] leading-[22px]">
+                  Mu Katale means &ldquo;in the market&rdquo;. Kampala&rsquo;s central markets move most of the fresh produce sold in the city, yet a tomato picked an hour outside Kampala can change hands three or four times before it reaches a plate.
+                </p>
+              </div>
+            }
+            detail={
+              <div className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] leading-[22px] space-y-3">
+                <p>
+                  Every handover in that chain adds a margin nobody has to justify. We shorten it. We name the
+                  district a product came from, we publish the farm-gate reference next to our price, and we price
+                  in whole shillings rather than hiding decimals in a currency the grower does not trade in.
+                </p>
+                <p>
+                  Uganda&rsquo;s smallholders are not short of enterprise. They are short of irrigation, storage and a
+                  dependable buyer. The national plan is to bring 1.5 million hectares under irrigation by 2040, and
+                  district programmes such as Agago&rsquo;s micro-scale irrigation scheme already show what that buys:
+                  a farmer earning Shs4.5m from three-quarters of an acre of tomatoes through a dry spell.
+                </p>
+              </div>
+            }
+          />
 
-          {/* Pillars of our Standard */}
+          {/* Commitments */}
           <div className="space-y-3">
             <h3 className="font-['Inter:Medium',_sans-serif] text-[16px] text-[#000000] tracking-[-0.16px]">
-              The Mu Katale Standard
+              Our Commitments
             </h3>
             <div className="grid grid-cols-1 gap-3">
-              {VALUES.map((item, idx) => (
-                <div key={idx} className="p-4 border border-neutral-200 rounded-xl bg-white space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-['Newsreader:Regular',_sans-serif] text-[18px] text-[#000000]">
-                      {item.title}
-                    </h4>
-                    <span className="text-[14px] font-bold text-[#426b1f] bg-[#426b1f]/10 px-2 py-0.5 rounded">
-                      {item.stat}
-                    </span>
-                  </div>
-                  <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[20px]">
-                    {item.description}
-                  </p>
-                </div>
+              {VALUES.map((item) => (
+                <ExpandableCard
+                  key={item.title}
+                  className="p-4 border border-neutral-200 rounded-xl bg-white"
+                  expandLabel="Read more"
+                  preview={
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="font-['Newsreader:Regular',_sans-serif] text-[18px] text-[#000000]">
+                          {item.title}
+                        </h4>
+                        <span className="shrink-0 text-[14px] font-bold text-[#426b1f] bg-[#426b1f]/10 px-2 py-0.5 rounded">
+                          {item.stat}
+                        </span>
+                      </div>
+                      <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[20px] line-clamp-3">
+                        {item.description}
+                      </p>
+                      <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#426b1f] leading-[16px]">
+                        {item.statLabel}
+                      </p>
+                    </div>
+                  }
+                  detail={
+                    <div className="space-y-2">
+                      <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[20px]">
+                        {item.description}
+                      </p>
+                      <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#426b1f] leading-[16px]">
+                        {item.statLabel}
+                      </p>
+                    </div>
+                  }
+                />
               ))}
             </div>
           </div>
 
-          {/* Farm Partners Grid */}
+          {/* Sourcing Regions */}
           <div className="space-y-3">
             <h3 className="font-['Inter:Medium',_sans-serif] text-[16px] text-[#000000] tracking-[-0.16px]">
-              Regional Farm Collective
+              Where We Buy
             </h3>
             <div className="space-y-2">
-              {FARMS.map((farm, idx) => (
-                <div key={idx} className="p-3.5 border border-neutral-100 bg-[#fbfbfb] rounded-xl flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-['Inter:Medium',_sans-serif] text-[14px] text-[#000000]">{farm.name}</span>
-                    <span className="text-[12px] text-[#426b1f] font-medium">{farm.location}</span>
-                  </div>
-                  <p className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">
-                    {farm.specialty}
-                  </p>
-                </div>
+              {REGIONS.map((region) => (
+                <ExpandableCard
+                  key={region.name}
+                  className="p-3.5 border border-neutral-100 bg-[#fbfbfb] rounded-xl"
+                  preview={
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-['Inter:Medium',_sans-serif] text-[14px] text-[#000000]">
+                          {region.name}
+                        </span>
+                        <span className="shrink-0 text-[12px] text-[#426b1f] font-medium">
+                          {region.location}
+                        </span>
+                      </div>
+                      <p className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575] line-clamp-2">
+                        {region.specialty}
+                      </p>
+                    </div>
+                  }
+                  detail={
+                    <div className="space-y-1.5">
+                      <p className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#000000]">
+                        {region.specialty}
+                      </p>
+                      <p className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575] leading-[18px]">
+                        {region.detail}
+                      </p>
+                    </div>
+                  }
+                />
               ))}
             </div>
           </div>
 
           {/* Footer note */}
-          <div className="pt-2 text-center text-[#757575] font-['Inter:Regular',_sans-serif] text-[12px]">
-            <p>Certified B-Corporation • Member 1% for the Planet</p>
+          <div className="pt-2 text-center text-[#757575] font-['Inter:Regular',_sans-serif] text-[12px] space-y-1">
+            <p>Prices in Ugandan shillings &bull; Figures sourced from Ugandan market reporting</p>
+            <p className="text-[11px] text-[#9a9a9a]">
+              Mu Katale means &ldquo;in the market&rdquo;
+            </p>
           </div>
         </div>
       </div>

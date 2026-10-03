@@ -1,5 +1,6 @@
 import React from 'react';
 import StatusBar from './shared/StatusBar';
+import ExpandableCard from './shared/ExpandableCard';
 import svgPaths from "../imports/svg-s5y93igtx2";
 
 interface NewsstandPageProps {
@@ -238,29 +239,47 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
                 <span className="text-[11px] uppercase tracking-wider font-semibold text-[#426b1f] bg-white/80 px-2.5 py-1 rounded-md border border-[#426b1f]/20">
                   {filteredArticles[0].category}
                 </span>
-                <button
-                  onClick={(e) => toggleBookmark(filteredArticles[0].id, e)}
-                  className="text-[#426b1f] hover:scale-110 transition-transform"
-                  aria-label="Bookmark article"
-                >
-                  <svg className="w-5 h-5" fill={bookmarkedIds.has(filteredArticles[0].id) ? "#426b1f" : "none"} viewBox="0 0 24 24" stroke="#426b1f" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-                  </svg>
-                </button>
               </div>
-              <div className="p-4 space-y-2.5">
-                <h3 className="font-['Newsreader:Regular',_sans-serif] text-[20px] text-[#000000] leading-[26px]">
-                  {filteredArticles[0].title}
-                </h3>
-                <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[20px]">
-                  {filteredArticles[0].summary}
-                </p>
-                <div className="pt-2 flex items-center justify-between gap-2 text-[12px] text-[#757575] font-['Inter:Regular',_sans-serif] border-t border-neutral-100">
-                  <span className="truncate">{filteredArticles[0].author}</span>
-                  <span className="shrink-0 text-[#426b1f] font-medium">
-                    {filteredArticles[0].source} · {filteredArticles[0].readTime}
-                  </span>
-                </div>
+              <div className="p-4">
+                <ExpandableCard
+                  expandLabel="Read full story"
+                  preview={
+                    <div className="space-y-2.5">
+                      <h3 className="font-['Newsreader:Regular',_sans-serif] text-[20px] text-[#000000] leading-[26px]">
+                        {filteredArticles[0].title}
+                      </h3>
+                      <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[20px] line-clamp-3">
+                        {filteredArticles[0].summary}
+                      </p>
+                      <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#9a9a9a] leading-[16px]">
+                        {filteredArticles[0].source} &bull; {filteredArticles[0].date} &bull;{' '}
+                        {filteredArticles[0].readTime}
+                      </p>
+                    </div>
+                  }
+                  detail={
+                    <div className="space-y-2.5">
+                      <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[20px]">
+                        {filteredArticles[0].summary}
+                      </p>
+                      <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#426b1f] leading-[16px]">
+                        Reported by {filteredArticles[0].author} &bull; {filteredArticles[0].source} &bull;{' '}
+                        {filteredArticles[0].date}
+                      </p>
+                    </div>
+                  }
+                  action={
+                    <button
+                      onClick={(e) => toggleBookmark(filteredArticles[0].id, e)}
+                      className="text-[#426b1f] hover:scale-110 transition-transform"
+                      aria-label="Bookmark article"
+                    >
+                      <svg className="w-5 h-5" fill={bookmarkedIds.has(filteredArticles[0].id) ? "#426b1f" : "none"} viewBox="0 0 24 24" stroke="#426b1f" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                      </svg>
+                    </button>
+                  }
+                />
               </div>
             </div>
           )}
@@ -268,14 +287,36 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
           {/* Secondary Articles */}
           <div className="space-y-3">
             {filteredArticles.slice(1).map(article => (
-              <div
+              <ExpandableCard
                 key={article.id}
-                className="p-4 border border-neutral-200 rounded-xl bg-white hover:border-[#426b1f]/30 transition-all flex flex-col gap-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-[#426b1f] uppercase tracking-wide">
-                    {article.category}
-                  </span>
+                className="p-4 border border-neutral-200 rounded-xl bg-white hover:border-[#426b1f]/30 transition-all"
+                preview={
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[11px] font-semibold text-[#426b1f] uppercase tracking-wide">
+                      {article.category}
+                    </span>
+                    <h4 className="font-['Newsreader:Regular',_sans-serif] text-[17px] text-[#000000] leading-[22px]">
+                      {article.title}
+                    </h4>
+                    <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] leading-[18px] line-clamp-2">
+                      {article.summary}
+                    </p>
+                    <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#9a9a9a] leading-[16px]">
+                      {article.source} &bull; {article.date} &bull; {article.readTime}
+                    </p>
+                  </div>
+                }
+                detail={
+                  <div className="flex flex-col gap-2">
+                    <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] leading-[18px]">
+                      {article.summary}
+                    </p>
+                    <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#426b1f] leading-[16px]">
+                      Reported by {article.author} &bull; {article.source}
+                    </p>
+                  </div>
+                }
+                action={
                   <button
                     onClick={(e) => toggleBookmark(article.id, e)}
                     className="text-[#426b1f]"
@@ -285,18 +326,8 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
                     </svg>
                   </button>
-                </div>
-                <h4 className="font-['Newsreader:Regular',_sans-serif] text-[17px] text-[#000000] leading-[22px]">
-                  {article.title}
-                </h4>
-                <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] leading-[18px] line-clamp-2">
-                  {article.summary}
-                </p>
-                <div className="pt-2 flex items-center justify-between gap-2 text-[11px] text-[#757575] font-['Inter:Regular',_sans-serif]">
-                  <span className="truncate">{article.source}</span>
-                  <span className="shrink-0">{article.date} · {article.readTime}</span>
-                </div>
-              </div>
+                }
+              />
             ))}
           </div>
 

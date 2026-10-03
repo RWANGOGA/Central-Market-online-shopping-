@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import svgPaths from "../imports/svg-42raqsyfh4";
 import footerSvgPaths from "../imports/svg-ved004mhkj";
 import clsx from "clsx";
+import ExpandableCard from './shared/ExpandableCard';
 
 interface ProductDetailPageProps {
   product: {
@@ -95,14 +96,36 @@ export default function ProductDetailPage({
           </div>
           
           {/* Description */}
-          <div>
-            <p className="text-[16px] font-['Inter:Regular',_sans-serif] text-[#000000] leading-[24px] mb-4">
-              {product.description}
-            </p>
-            <p className="text-[16px] font-['Inter:Regular',_sans-serif] text-[#757575] leading-[20px]">
-              {product.location}
-            </p>
-          </div>
+          <ExpandableCard
+            expandLabel="Full description"
+            preview={
+              <p className="text-[16px] font-['Inter:Regular',_sans-serif] text-[#000000] leading-[24px] line-clamp-3">
+                {product.description}
+              </p>
+            }
+            detail={
+              <div className="space-y-3">
+                <p className="text-[16px] font-['Inter:Regular',_sans-serif] text-[#000000] leading-[24px]">
+                  {product.description}
+                </p>
+                <p className="text-[16px] font-['Inter:Regular',_sans-serif] text-[#757575] leading-[20px]">
+                  {product.location}
+                </p>
+                {product.dietary && product.dietary.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    {product.dietary.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[11px] font-medium text-[#426b1f] bg-[#426b1f]/10 border border-[#426b1f]/20 rounded px-2 py-0.5"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            }
+          />
         </div>
       </div>
       
