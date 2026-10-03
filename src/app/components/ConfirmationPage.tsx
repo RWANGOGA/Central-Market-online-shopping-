@@ -2,6 +2,7 @@ import React from 'react';
 import svgPaths from "../imports/svg-v7ovcq1vez";
 import StatusBar from './shared/StatusBar';
 import clsx from "clsx";
+import { formatUgx } from '../lib/currency';
 
 interface CartItem {
   id: number;
@@ -30,8 +31,8 @@ export default function ConfirmationPage({
   onCompletePurchase
 }: ConfirmationPageProps) {
   const subtotal = cartItems.reduce((sum, item) => sum + (item.priceValue * item.quantity), 0);
-  const shipping = 0.00;
-  const taxes = 0.75;
+  const shipping = 0;
+  const taxes = 2970;
   const total = subtotal + shipping + taxes;
 
   return (
@@ -84,7 +85,7 @@ export default function ConfirmationPage({
               <p className="block leading-[1.45] whitespace-pre">Subtotal</p>
             </div>
             <div className="flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic text-[#757575] text-[14px] text-nowrap text-right">
-              <p className="block leading-[1.45] whitespace-pre">${subtotal.toFixed(2)}</p>
+              <p className="block leading-[1.45] whitespace-pre">{formatUgx(subtotal)}</p>
             </div>
           </div>
           
@@ -94,7 +95,7 @@ export default function ConfirmationPage({
               <p className="block leading-[1.45] whitespace-pre">Shipping</p>
             </div>
             <div className="flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic text-[#757575] text-[14px] text-nowrap text-right">
-              <p className="block leading-[1.45] whitespace-pre">${shipping.toFixed(2)}</p>
+              <p className="block leading-[1.45] whitespace-pre">{formatUgx(shipping)}</p>
             </div>
           </div>
           
@@ -104,7 +105,7 @@ export default function ConfirmationPage({
               <p className="block leading-[1.45] whitespace-pre">Taxes</p>
             </div>
             <div className="flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic text-[#426b1f] text-[14px] text-nowrap text-right">
-              <p className="block leading-[1.45] whitespace-pre">${taxes.toFixed(2)}</p>
+              <p className="block leading-[1.45] whitespace-pre">{formatUgx(taxes)}</p>
             </div>
           </div>
           
@@ -114,7 +115,7 @@ export default function ConfirmationPage({
               <p className="block leading-[1.45] whitespace-pre text-[18px] font-bold text-[18px]">Total</p>
             </div>
             <div className="flex flex-col font-['Inter:Bold',_sans-serif] font-bold justify-center leading-[0] not-italic text-[#426b1f] text-[18px] text-nowrap text-right">
-              <p className="block leading-[1.45] whitespace-pre text-[18px] font-bold text-[18px]">${total.toFixed(2)}</p>
+              <p className="block leading-[1.45] whitespace-pre text-[18px] font-bold text-[18px]">{formatUgx(total)}</p>
             </div>
           </div>
         </div>
@@ -134,7 +135,7 @@ interface ProductItemProps {
 
 function ProductItem({ item, onUpdateQuantity }: ProductItemProps) {
   const [showDropdown, setShowDropdown] = React.useState(false);
-  const totalPrice = (item.priceValue * item.quantity).toFixed(2);
+  const totalPrice = item.priceValue * item.quantity;
 
   return (
     <div className="bg-[#ffffff] h-[88px] relative shrink-0 w-[327px]">
@@ -209,7 +210,7 @@ function ProductItem({ item, onUpdateQuantity }: ProductItemProps) {
       
       {/* Total Price */}
       <div className="absolute flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic right-0 text-[#757575] text-[14px] text-nowrap text-right top-[58px] translate-y-[-50%]">
-        <p className="block leading-[16px] whitespace-pre">${totalPrice}</p>
+        <p className="block leading-[16px] whitespace-pre">{formatUgx(totalPrice)}</p>
       </div>
     </div>
   );

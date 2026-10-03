@@ -87,10 +87,36 @@ curl -s -X POST "$API/api/orders" -H 'content-type: application/json' \
   -d '{"cartId":1,"customerId":1,"status":"paid"}' | jq '.data.reference'
 ```
 
+## Currency
+
+All money is **Ugandan shillings (UGX)** stored as whole numbers. The shilling
+has no minor unit in common use, so every money column is `integer` and no
+endpoint ever returns a fractional amount.
+
+| Column | Type |
+| --- | --- |
+| `products.price_value` | `integer` |
+| `orders.subtotal` / `shipping` / `tax` / `total` | `integer` |
+| `order_items.price_value` / `line_total` | `integer` |
+
+Both `products` and `orders` carry a `currency` column (default `UGX`) so a
+future multi-currency store does not need a migration. Product responses expose
+it as `currency` alongside `price`.
+
+The catalogue was converted from the original USD figures in
+`src/app/App.tsx` at **3,960 UGX per USD** (mid-market, 2026-10-03). Line totals
+are `priceValue * quantity` on integers rather than a converted float, so
+quantities never accumulate rounding drift and the line totals always sum
+exactly to the cart subtotal.
+
+Tax is still `8.25%`. That is the original US-style rate carried over; Uganda's
+VAT is 18%, so change `TAX_RATE` in `api/src/app/api/orders/route.ts` if you
+want local rates.
+
 ## Design notes
 
 **Order totals** are computed server-side in `api/src/app/api/orders/route.ts`:
-subtotal from cart lines, `5.99` flat shipping (free at `$50`+), `8.25%` tax.
+subtotal from cart lines, `23,720` flat shipping (free at `198,000`+), `8.25%` tax.
 The frontend must never be trusted for these numbers.
 
 **Cart conversion is transactional.** Order creation, line-item snapshotting and

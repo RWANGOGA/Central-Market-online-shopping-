@@ -24,7 +24,7 @@ export async function loadCart(cartId: number) {
 
   const lines = items.map((item) => ({
     ...item,
-    lineTotal: Number((item.priceValue * item.quantity).toFixed(2)),
+    lineTotal: item.priceValue * item.quantity,
   }));
 
   return {
@@ -33,6 +33,6 @@ export async function loadCart(cartId: number) {
     status: cart.status,
     items: lines,
     itemCount: lines.reduce((sum, line) => sum + line.quantity, 0),
-    subtotal: Number(lines.reduce((sum, line) => sum + line.lineTotal, 0).toFixed(2)),
+    subtotal: lines.reduce((sum, line) => sum + line.lineTotal, 0),
   };
 }

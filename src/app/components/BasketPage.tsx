@@ -2,6 +2,7 @@ import React from 'react';
 import svgPaths from "../imports/svg-ixc5uwmuox";
 import QuantityDropdown from './QuantityDropdown';
 import IconForward from '../imports/IconForward-2013-176';
+import { formatUgx } from '../lib/currency';
 
 interface CartItem {
   id: number;
@@ -69,7 +70,7 @@ export default function BasketPage({
                   <p className="block leading-[1.45] whitespace-pre text-[18px]">Subtotal</p>
                 </div>
                 <div className="flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic text-[#426b1f] text-[18px] text-nowrap text-right">
-                  <p className="block leading-[1.45] whitespace-pre text-[18px]">${subtotal.toFixed(2)}</p>
+                  <p className="block leading-[1.45] whitespace-pre text-[18px]">{formatUgx(subtotal)}</p>
                 </div>
               </div>
             </div>
@@ -295,7 +296,7 @@ interface ProductItemProps {
 }
 
 function ProductItem({ item, onUpdateQuantity }: ProductItemProps) {
-  const totalPrice = (item.priceValue * item.quantity).toFixed(2);
+  const totalPrice = item.priceValue * item.quantity;
 
   const handleQuantityChange = (quantity: number) => {
     onUpdateQuantity(item.id, quantity);
@@ -332,7 +333,7 @@ function ProductItem({ item, onUpdateQuantity }: ProductItemProps) {
       
       {/* Total Price */}
       <div className="absolute flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic right-0 text-[#757575] text-[14px] text-nowrap text-right top-[58px] translate-y-[-50%]">
-        <p className="block leading-[16px] whitespace-pre text-[16px]">${totalPrice}</p>
+        <p className="block leading-[16px] whitespace-pre text-[16px]">{formatUgx(totalPrice)}</p>
       </div>
     </div>
   );

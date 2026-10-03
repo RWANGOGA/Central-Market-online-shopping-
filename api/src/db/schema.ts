@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const products = sqliteTable('products', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -8,8 +8,9 @@ export const products = sqliteTable('products', {
   description: text('description').notNull(),
   farm: text('farm').notNull(),
   location: text('location').notNull(),
-  priceValue: real('price_value').notNull(),
+  priceValue: integer('price_value').notNull(),
   priceLabel: text('price_label').notNull(),
+  currency: text('currency').notNull().default('UGX'),
   unit: text('unit').notNull(),
   imageFiles: text('image_files', { mode: 'json' }).notNull().$type<string[]>(),
   dietary: text('dietary', { mode: 'json' }).notNull().$type<string[]>(),
@@ -77,10 +78,11 @@ export const orders = sqliteTable('orders', {
   })
     .notNull()
     .default('pending'),
-  subtotal: real('subtotal').notNull(),
-  shipping: real('shipping').notNull().default(0),
-  tax: real('tax').notNull().default(0),
-  total: real('total').notNull(),
+  subtotal: integer('subtotal').notNull(),
+  shipping: integer('shipping').notNull().default(0),
+  tax: integer('tax').notNull().default(0),
+  total: integer('total').notNull(),
+  currency: text('currency').notNull().default('UGX'),
   shippingAddress: text('shipping_address', { mode: 'json' }).notNull().$type<{
     fullName: string;
     address: string;
@@ -103,9 +105,9 @@ export const orderItems = sqliteTable('order_items', {
     .notNull()
     .references(() => products.id),
   name: text('name').notNull(),
-  priceValue: real('price_value').notNull(),
+  priceValue: integer('price_value').notNull(),
   quantity: integer('quantity').notNull(),
-  lineTotal: real('line_total').notNull(),
+  lineTotal: integer('line_total').notNull(),
 });
 
 export type Product = typeof products.$inferSelect;

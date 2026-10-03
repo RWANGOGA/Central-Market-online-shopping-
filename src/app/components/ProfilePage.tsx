@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
+import { formatUgx } from "../lib/currency";
 
 interface CustomerInfo {
   fullName: string;
@@ -280,7 +281,7 @@ export default function ProfilePage({
                 <p className="text-[12px] text-[#757575]">Placed Oct 2, 2026 • 3 items</p>
                 <div className="text-[13px] text-[#000000] pt-1 border-t border-neutral-100 flex justify-between">
                   <span>Fresh Harvest Box (Ginger, Garlic, Peas)</span>
-                  <span className="font-medium">$11.60</span>
+                  <span className="font-medium">{formatUgx(45936)}</span>
                 </div>
               </div>
 
@@ -292,7 +293,7 @@ export default function ProfilePage({
                 <p className="text-[12px] text-[#757575]">Delivered Sep 24, 2026 • 4 items</p>
                 <div className="text-[13px] text-[#000000] pt-1 border-t border-neutral-100 flex justify-between">
                   <span>Vidalia Onions & Avocados</span>
-                  <span className="font-medium">$9.42</span>
+                  <span className="font-medium">{formatUgx(37303)}</span>
                 </div>
               </div>
             </div>

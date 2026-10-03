@@ -9,6 +9,7 @@ export type ProductDto = {
   location: string;
   priceValue: number;
   price: string;
+  currency: string;
   unit: string;
   images: string[];
   dietary: string[];
@@ -30,6 +31,7 @@ export function toProductDto(row: Product): ProductDto {
     location: row.location,
     priceValue: row.priceValue,
     price: row.priceLabel,
+    currency: row.currency,
     unit: row.unit,
     images: row.imageFiles.map((file) => `/api/assets/${file}`),
     dietary: row.dietary,

@@ -5,8 +5,12 @@ import { carts, customers, orderItems, orders } from '@/db/schema';
 import { loadCart } from '@/lib/cart';
 import { error, json, parsePositiveInt } from '@/lib/http';
 
-const SHIPPING_FLAT_RATE = 5.99;
-const FREE_SHIPPING_THRESHOLD = 50;
+/**
+ * All amounts are whole Ugandan shillings. The shilling has no minor unit in
+ * common use, so nothing here produces decimals.
+ */
+const SHIPPING_FLAT_RATE = 23720;
+const FREE_SHIPPING_THRESHOLD = 198000;
 const TAX_RATE = 0.0825;
 
 const createOrderSchema = z.object({
@@ -58,8 +62,8 @@ export async function POST(request: Request) {
 
   const subtotal = cart.subtotal;
   const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
-  const tax = Number((subtotal * TAX_RATE).toFixed(2));
-  const total = Number((subtotal + shipping + tax).toFixed(2));
+  const tax = Math.round(subtotal * TAX_RATE);
+  const total = subtotal + shipping + tax;
 
   const created = await db.transaction(async (tx) => {
     const [order] = await tx
