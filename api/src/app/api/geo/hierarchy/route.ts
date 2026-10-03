@@ -114,11 +114,11 @@ export async function GET() {
     data: tree,
     meta: {
       levels: [
-        { level: 'Region', count: allRegions.length, geometryAvailable: allRegions.some((r) => r.hasGeometry) },
-        { level: 'District', count: allDistricts.length, geometryAvailable: allDistricts.some((d) => d.hasGeometry) },
-        { level: 'SubCounty', count: allSubCounties.length, geometryAvailable: allSubCounties.some((s) => s.hasGeometry) },
-        { level: 'Parish', count: allParishes.length, geometryAvailable: allParishes.some((p) => p.hasGeometry) },
-        { level: 'Village', count: allVillages.length, geometryAvailable: allVillages.some((v) => v.hasGeometry) },
+        { level: 'Region', label: 'regions', count: allRegions.length, geometryAvailable: allRegions.some((r) => r.hasGeometry) },
+        { level: 'District', label: 'mapped areas', count: allDistricts.length, geometryAvailable: allDistricts.some((d) => d.hasGeometry) },
+        { level: 'SubCounty', label: 'sub-counties', count: allSubCounties.length, geometryAvailable: allSubCounties.some((s) => s.hasGeometry) },
+        { level: 'Parish', label: 'parishes', count: allParishes.length, geometryAvailable: allParishes.some((p) => p.hasGeometry) },
+        { level: 'Village', label: 'villages', count: allVillages.length, geometryAvailable: allVillages.some((v) => v.hasGeometry) },
       ],
       // Kept for callers that just want the headline totals.
       regions: allRegions.length,
@@ -126,7 +126,8 @@ export async function GET() {
       subCounties: await countAt(subCounties),
       parishes: await countAt(parishes),
       villages: await countAt(villages),
-      source: 'geoBoundaries gbOpen ADM1/ADM2 for regions and districts; sub-county, parish and village tables are empty until a source is supplied',
+      source:
+        'geoBoundaries gbOpen ADM1/ADM2. The ADM2 layer is not a clean district register: it mixes districts with sub-counties and omits 32 of the 40 largest districts, so treat it as mapped boundaries. Use UBOS for an authoritative district list.',
     },
   });
 }

@@ -8,6 +8,15 @@ import { db } from './index';
  * Regions and districts come from api/data/geo/places.json, which is derived
  * from geoBoundaries gbOpen ADM1 and ADM2 (public domain). Centroids and
  * bounding boxes are precomputed there so seeding stays a plain insert.
+ *
+ * One caveat worth carrying forward: geoBoundaries' ADM2 for Uganda is not a
+ * clean district layer. It mixes whole districts with sub-counties, and 32 of
+ * the 40 largest districts and cities are absent, though the sub-counties
+ * inside them are present. Gulu, Mbale, Jinja and Mbarara are missing as
+ * districts while Dodoth, Chua and Bungokho appear in their place. The layer is
+ * therefore stored as `districts` because that is the level it mostly
+ * approximates, but callers must treat it as mapped boundaries rather than an
+ * authoritative district register. UBOS is the source for the real list.
  */
 
 type SeedRegion = {

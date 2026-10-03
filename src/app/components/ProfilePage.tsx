@@ -284,7 +284,7 @@ export default function ProfilePage({
             <div className="space-y-3 font-['Inter:Regular',_sans-serif]">
               <div className="p-4 border border-neutral-200 rounded-xl bg-white space-y-2">
                 <div className="flex items-center justify-between text-[13px]">
-                  <span className="font-medium text-[#000000]">Order #WP-84920</span>
+                  <span className="font-medium text-[#000000]">Order #MK-84920</span>
                   <span className="text-[#426b1f] bg-[#426b1f]/10 px-2 py-0.5 rounded text-[11px] font-semibold">Active</span>
                 </div>
                 <p className="text-[12px] text-[#757575]">Placed Oct 2, 2026 • 3 items</p>
@@ -296,12 +296,12 @@ export default function ProfilePage({
 
               <div className="p-4 border border-neutral-200 rounded-xl bg-white space-y-2 opacity-80">
                 <div className="flex items-center justify-between text-[13px]">
-                  <span className="font-medium text-[#000000]">Order #WP-81204</span>
+                  <span className="font-medium text-[#000000]">Order #MK-81204</span>
                   <span className="text-[#757575] bg-neutral-100 px-2 py-0.5 rounded text-[11px]">Delivered</span>
                 </div>
                 <p className="text-[12px] text-[#757575]">Delivered Sep 24, 2026 • 4 items</p>
                 <div className="text-[13px] text-[#000000] pt-1 border-t border-neutral-100 flex justify-between">
-                  <span>Vidalia Onions & Avocados</span>
+                  <span>Sweet Onions &amp; Avocados</span>
                   <span className="font-medium">{formatUgx(37303)}</span>
                 </div>
               </div>
@@ -321,11 +321,11 @@ export default function ProfilePage({
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" defaultChecked className="accent-[#426b1f] w-4 h-4 rounded" />
-                  <span className="text-[13px] text-[#000000]">Notify when Kunisaki Farms garlic harvests</span>
+                  <span className="text-[13px] text-[#000000]">Notify when Bukalasi Farm garlic harvests</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" defaultChecked className="accent-[#426b1f] w-4 h-4 rounded" />
-                  <span className="text-[13px] text-[#000000]">Plastic-free, 100% compostable insulation</span>
+                  <span className="text-[13px] text-[#000000]">Reuseable bags and crates preferred</span>
                 </label>
               </div>
             </div>

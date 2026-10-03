@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { products } from './schema';
 import { db } from './index';
 import type { NewProduct } from './schema';
@@ -8,8 +9,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Garlic clove',
     description:
       'Bold, aromatic garlic cloves with a rich, complex flavor. Perfect for roasting, sautéing, or adding depth to any dish.',
-    farm: 'Kunisaki Farms',
-    location: 'Grown in Gilroy, CA by Kunisaki Farms',
+    farm: 'Bukalasi Farm',
+    location: 'Grown in Sironko District by Bukalasi Farm',
     priceValue: 3524,
     priceLabel: 'USh 3,524 each',
     unit: 'each',
@@ -25,8 +26,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Sugar snap pea',
     description:
       'Crisp, sweet sugar snap peas with edible pods. Enjoy raw as a snack or lightly steamed to preserve their natural crunch.',
-    farm: 'Helmbolt Orchards',
-    location: 'Grown in Salinas Valley, CA by Helmbolt Orchards',
+    farm: 'Rwambari Farm',
+    location: 'Grown in Kyegegwa District by Rwambari Farm',
     priceValue: 9068,
     priceLabel: 'USh 9,068/lb',
     unit: 'lb',
@@ -42,8 +43,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Ginger',
     description:
       'Fresh, organic ginger root with a warm, spicy kick. Essential for Asian cooking and natural wellness remedies.',
-    farm: 'Bui Farms',
-    location: 'Grown in Hawaii by Bui Farms',
+    farm: 'Bungokho Farm',
+    location: 'Grown in Mbale District by Bungokho Farm',
     priceValue: 16632,
     priceLabel: 'USh 16,632/lb',
     unit: 'lb',
@@ -56,8 +57,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Sweet onion',
     description:
       'Mild, sweet onions perfect for caramelizing or eating raw. Low in sulfur with a delicate, pleasant flavor.',
-    farm: 'Castelao Farms',
-    location: 'Grown in Vidalia, GA by Castelao Farms',
+    farm: 'Kyarakora Farm',
+    location: 'Grown in Kabale District by Kyarakora Farm',
     priceValue: 1544,
     priceLabel: 'USh 1,544/lb',
     unit: 'lb',
@@ -70,8 +71,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Raspberries',
     description:
       'Juicy, sweet-tart raspberries bursting with flavor. Rich in antioxidants and perfect for snacking or desserts.',
-    farm: 'Bernal Growers',
-    location: 'Grown in Oregon by Bernal Growers',
+    farm: 'Ngarama Farm',
+    location: 'Grown in Mbarara District by Ngarama Farm',
     priceValue: 15800,
     priceLabel: 'USh 15,800 pint',
     unit: 'pint',
@@ -84,8 +85,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Bananas',
     description:
       'Sweet, creamy bananas perfect for smoothies, baking, or eating fresh. A great source of potassium and natural energy.',
-    farm: 'Lowry Farms',
-    location: 'Grown in Costa Rica by Lowry Farms',
+    farm: 'Rwekubo Farm',
+    location: 'Grown in Isingiro District by Rwekubo Farm',
     priceValue: 2534,
     priceLabel: 'USh 2,534/lb',
     unit: 'lb',
@@ -98,8 +99,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Avocados',
     description:
       'Creamy, buttery avocados rich in healthy fats. Perfect for guacamole, toast, or adding to salads and smoothies.',
-    farm: 'Gonzalez Produce',
-    location: 'Grown in Michoacán, Mexico by Gonzalez Produce',
+    farm: 'Najjera Farm',
+    location: 'Grown in Wakiso District by Najjera Farm',
     priceValue: 4158,
     priceLabel: 'USh 4,158 each',
     unit: 'each',
@@ -112,8 +113,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Kale',
     description:
       'Nutrient-dense kale with a robust, earthy flavor. Excellent for salads, smoothies, or crispy kale chips.',
-    farm: 'Green Growers',
-    location: 'Grown in California Central Valley by Green Growers',
+    farm: 'Kawolo Farm',
+    location: 'Grown in Mityana District by Kawolo Farm',
     priceValue: 7880,
     priceLabel: 'USh 7,880 each',
     unit: 'each',
@@ -126,8 +127,8 @@ const SEED_PRODUCTS: NewProduct[] = [
     name: 'Radish',
     description:
       'Crisp, peppery radishes with a fresh, clean bite. Great for salads, pickling, or as a crunchy snack.',
-    farm: 'Gonzalez Produce',
-    location: 'Grown in San Diego County, CA by Gonzalez Produce',
+    farm: 'Nkolokoto Farm',
+    location: 'Grown in Mpigi District by Nkolokoto Farm',
     priceValue: 5108,
     priceLabel: 'USh 5,108 each',
     unit: 'each',
@@ -139,7 +140,29 @@ const SEED_PRODUCTS: NewProduct[] = [
 
 async function seed() {
   console.log('Seeding products...');
-  await db.insert(products).values(SEED_PRODUCTS).onConflictDoNothing();
+
+  // Upsert rather than skip, so re-running the seed after editing a product
+  // actually applies the change. `stock` and `active` are left alone because
+  // they are operational values, not seed data.
+  await db
+    .insert(products)
+    .values(SEED_PRODUCTS)
+    .onConflictDoUpdate({
+      target: products.slug,
+      set: {
+        name: sql`excluded.name`,
+        description: sql`excluded.description`,
+        farm: sql`excluded.farm`,
+        location: sql`excluded.location`,
+        priceValue: sql`excluded.price_value`,
+        priceLabel: sql`excluded.price_label`,
+        currency: sql`excluded.currency`,
+        unit: sql`excluded.unit`,
+        imageFiles: sql`excluded.image_files`,
+        dietary: sql`excluded.dietary`,
+      },
+    });
+
   const rows = await db.select().from(products);
   console.log(`Done. ${rows.length} products in the database.`);
 }

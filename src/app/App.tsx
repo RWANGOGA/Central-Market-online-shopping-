@@ -33,11 +33,11 @@ const PRODUCTS = [
     name: "Garlic clove",
     price: "USh 3,524 each",
     priceValue: 3524,
-    farm: "Kunisaki Farms",
+    farm: "Bukalasi Farm",
     images: [imgRectangle6538, imgRectangle6539],
     isFavorite: false,
     description: "Bold, aromatic garlic cloves with a rich, complex flavor. Perfect for roasting, sautéing, or adding depth to any dish.",
-    location: "Grown in Gilroy, CA by Kunisaki Farms",
+    location: "Grown in Sironko District by Bukalasi Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -45,11 +45,11 @@ const PRODUCTS = [
     name: "Sugar snap pea",
     price: "USh 9,068/lb",
     priceValue: 9068,
-    farm: "Helmbolt Orchards",
+    farm: "Rwambari Farm",
     images: [imgRectangle6540, imgRectangle6539],
     isFavorite: false,
     description: "Crisp, sweet sugar snap peas with edible pods. Enjoy raw as a snack or lightly steamed to preserve their natural crunch.",
-    location: "Grown in Salinas Valley, CA by Helmbolt Orchards",
+    location: "Grown in Kyegegwa District by Rwambari Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -57,11 +57,11 @@ const PRODUCTS = [
     name: "Ginger",
     price: "USh 16,632/lb",
     priceValue: 16632,
-    farm: "Bui Farms",
+    farm: "Bungokho Farm",
     images: [imgRectangle6541],
     isFavorite: false,
     description: "Fresh, organic ginger root with a warm, spicy kick. Essential for Asian cooking and natural wellness remedies.",
-    location: "Grown in Hawaii by Bui Farms",
+    location: "Grown in Mbale District by Bungokho Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -69,11 +69,11 @@ const PRODUCTS = [
     name: "Sweet onion",
     price: "USh 1,544/lb",
     priceValue: 1544,
-    farm: "Castelao Farms",
+    farm: "Kyarakora Farm",
     images: [imgRectangle6542],
     isFavorite: false,
     description: "Mild, sweet onions perfect for caramelizing or eating raw. Low in sulfur with a delicate, pleasant flavor.",
-    location: "Grown in Vidalia, GA by Castelao Farms",
+    location: "Grown in Kabale District by Kyarakora Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -81,11 +81,11 @@ const PRODUCTS = [
     name: "Raspberries",
     price: "USh 15,800 pint",
     priceValue: 15800,
-    farm: "Bernal Growers",
+    farm: "Ngarama Farm",
     images: [imgRectangle6543],
     isFavorite: false,
     description: "Juicy, sweet-tart raspberries bursting with flavor. Rich in antioxidants and perfect for snacking or desserts.",
-    location: "Grown in Oregon by Bernal Growers",
+    location: "Grown in Mbarara District by Ngarama Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -93,11 +93,11 @@ const PRODUCTS = [
     name: "Bananas",
     price: "USh 2,534/lb",
     priceValue: 2534,
-    farm: "Lowry Farms",
+    farm: "Rwekubo Farm",
     images: [imgRectangle6544],
     isFavorite: false,
     description: "Sweet, creamy bananas perfect for smoothies, baking, or eating fresh. A great source of potassium and natural energy.",
-    location: "Grown in Costa Rica by Lowry Farms",
+    location: "Grown in Isingiro District by Rwekubo Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -105,11 +105,11 @@ const PRODUCTS = [
     name: "Avocados",
     price: "USh 4,158 each",
     priceValue: 4158,
-    farm: "Gonzalez Produce",
+    farm: "Najjera Farm",
     images: [imgRectangle6545],
     isFavorite: false,
     description: "Creamy, buttery avocados rich in healthy fats. Perfect for guacamole, toast, or adding to salads and smoothies.",
-    location: "Grown in Michoacán, Mexico by Gonzalez Produce",
+    location: "Grown in Wakiso District by Najjera Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -117,11 +117,11 @@ const PRODUCTS = [
     name: "Kale",
     price: "USh 7,880 each",
     priceValue: 7880,
-    farm: "Green Growers",
+    farm: "Kawolo Farm",
     images: [imgRectangle6546],
     isFavorite: false,
     description: "Nutrient-dense kale with a robust, earthy flavor. Excellent for salads, smoothies, or crispy kale chips.",
-    location: "Grown in California Central Valley by Green Growers",
+    location: "Grown in Mityana District by Kawolo Farm",
     dietary: ["VG", "GF", "DF"]
   },
   {
@@ -129,11 +129,11 @@ const PRODUCTS = [
     name: "Radish",
     price: "USh 5,108 each",
     priceValue: 5108,
-    farm: "Gonzalez Produce",
+    farm: "Nkolokoto Farm",
     images: [imgRectangle6547],
     isFavorite: false,
     description: "Crisp, peppery radishes with a fresh, clean bite. Great for salads, pickling, or as a crunchy snack.",
-    location: "Grown in San Diego County, CA by Gonzalez Produce",
+    location: "Grown in Mpigi District by Nkolokoto Farm",
     dietary: ["VG", "GF", "DF"]
   }
 ];

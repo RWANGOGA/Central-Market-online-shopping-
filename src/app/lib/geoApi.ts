@@ -12,6 +12,8 @@ export type GeoNode = {
 
 export type LevelAvailability = {
   level: string;
+  /** Plural wording for display, e.g. "mapped areas" for the ADM2 layer. */
+  label?: string;
   count: number;
   geometryAvailable: boolean;
 };

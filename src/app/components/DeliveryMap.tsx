@@ -338,14 +338,14 @@ function Legend({
   levels,
   drilled,
 }: {
-  levels: { level: string; count: number; geometryAvailable: boolean }[];
+  levels: { level: string; label?: string; count: number; geometryAvailable: boolean }[];
   drilled: boolean;
 }) {
   return (
-    <div className="absolute bottom-3 left-3 z-[1050] bg-white/95 rounded-lg shadow px-2.5 py-1.5 space-y-0.5">
+    <div className="absolute bottom-3 left-3 z-[1050] bg-white/95 rounded-lg shadow px-2.5 py-1.5 space-y-0.5 max-w-[62%]">
       {levels.map((level) => (
         <p key={level.level} className="text-[10px] font-['Inter:Regular',_sans-serif] text-[#757575]">
-          <span className="text-[#000000]">{level.count}</span> {level.level.toLowerCase()}s
+          <span className="text-[#000000]">{level.count}</span> {level.label ?? level.level.toLowerCase() + 's'}
           {!level.geometryAvailable && <span style={{ color: AMBER }}> · no outline data</span>}
         </p>
       ))}
