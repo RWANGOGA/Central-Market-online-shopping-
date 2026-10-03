@@ -113,6 +113,42 @@ Tax is still `8.25%`. That is the original US-style rate carried over; Uganda's
 VAT is 18%, so change `TAX_RATE` in `api/src/app/api/orders/route.ts` if you
 want local rates.
 
+## The frontend cart
+
+The cart is wired to this API. `src/app/lib/cartApi.ts` is the client, and
+`src/app/App.tsx` holds the cart id in a ref and syncs on every mutation:
+
+| Action | Call |
+| --- | --- |
+| Page load | `resolveCartId()` then `GET /api/cart?cartId=` |
+| Add to basket | `POST /api/cart/items` |
+| Change quantity | `PATCH /api/cart` |
+| Completed purchase | `resetCart()`, which clears the lines and issues a new cart |
+
+The cart id is kept in `localStorage` under `mu-katale.cartId`, so a refresh
+restores the basket. `resolveCartId` recreates the cart if the stored one no
+longer exists, which happens after `npm run db:reset`.
+
+**Updates are optimistic.** The local `useState` cart updates first and the
+request follows, so the interface never waits on the network. Every call in
+`cartApi.ts` returns `null` instead of throwing when the API is unreachable, so
+with the backend stopped the app still works as a purely local cart.
+
+Cart lines are always rebuilt from the frontend's own catalogue via
+`buildCartItem`, whether they come from a tap or from the API on reload. That
+keeps names, prices and images identical to the product list. It also means the
+frontend and the seed must agree on product ids and price labels, which the two
+currently do.
+
+The Vite dev server proxies `/api` to `http://localhost:3000` (see
+`vite.config.ts`), so the browser sees a single origin and there is no CORS to
+configure in development. In production on separate domains, add CORS headers
+to the route handlers instead.
+
+Orders are not wired up yet: `POST /api/orders` still needs a `customerId`, and
+the checkout form is not yet creating a customer. A completed purchase empties
+the cart rather than converting it into an order.
+
 ## Design notes
 
 **Order totals** are computed server-side in `api/src/app/api/orders/route.ts`:

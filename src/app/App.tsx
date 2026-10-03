@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import imgRectangle6538 from "figma:asset/39a095c5219433210528f313f4db7ed09e8b6466.png";
 import imgRectangle6539 from "figma:asset/c7319cef2b86a8f71b6765b77a10caccb7fc8b83.png";
 import imgRectangle6540 from "figma:asset/1b41f753535d961cfbba08b0eb03a1902c09f7f3.png";
@@ -23,6 +23,7 @@ import AboutPage from './components/AboutPage';
 import ProfilePage from './components/ProfilePage';
 import AddToCartOverlay from './components/AddToCartOverlay';
 import Menu from './components/Menu';
+import { resolveCartId, addItem as apiAddItem, updateItem, resetCart } from './lib/cartApi';
 
 // Enhanced product data with descriptions and locations
 const PRODUCTS = [
@@ -41,7 +42,7 @@ const PRODUCTS = [
   {
     id: 2,
     name: "Sugar snap pea",
-    price: "USh 9,068 lb",
+    price: "USh 9,068/lb",
     priceValue: 9068,
     farm: "Helmbolt Orchards",
     images: [imgRectangle6540, imgRectangle6539],
@@ -53,7 +54,7 @@ const PRODUCTS = [
   {
     id: 3,
     name: "Ginger",
-    price: "USh 16,632 lb",
+    price: "USh 16,632/lb",
     priceValue: 16632,
     farm: "Bui Farms",
     images: [imgRectangle6541],
@@ -65,7 +66,7 @@ const PRODUCTS = [
   {
     id: 4,
     name: "Sweet onion",
-    price: "USh 1,544 lb",
+    price: "USh 1,544/lb",
     priceValue: 1544,
     farm: "Castelao Farms",
     images: [imgRectangle6542],
@@ -89,7 +90,7 @@ const PRODUCTS = [
   {
     id: 6,
     name: "Bananas",
-    price: "USh 2,534 lb",
+    price: "USh 2,534/lb",
     priceValue: 2534,
     farm: "Lowry Farms",
     images: [imgRectangle6544],
@@ -163,6 +164,22 @@ interface CustomerInfo {
   zipCode: string;
 }
 
+/**
+ * Cart lines are always built from the local catalogue, whether they arrive
+ * from a tap or from the API on reload, so the basket always renders with the
+ * same name, price and image as the product list.
+ */
+function buildCartItem(product: (typeof PRODUCTS)[number], quantity: number): CartItem {
+  return {
+    id: product.id,
+    name: product.name,
+    price: product.price,
+    priceValue: product.priceValue,
+    image: product.images[0],
+    quantity,
+  };
+}
+
 export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
@@ -187,7 +204,40 @@ export default function App() {
   const [overlayProduct, setOverlayProduct] = useState<OverlayProduct | null>(null);
   const [overlayQuantity, setOverlayQuantity] = useState(1);
 
+  // Server cart. Null means the API is not running and the cart stays local.
+  const cartIdRef = useRef<number | null>(null);
+
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Restore the cart on load so a refresh does not empty the basket.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const cartId = await resolveCartId();
+      if (cancelled) return;
+
+      if (!cartId) return; // API not running, cart stays local-only
+      cartIdRef.current = cartId;
+
+      const cart = await fetchCart(cartId);
+      if (cancelled || !cart) return;
+
+      // Rebuild items from the local catalogue so names, prices and images
+      // stay identical to the rest of the app. Server-only products are
+      // skipped rather than rendered half-populated.
+      const restored = cart.items.flatMap((line) => {
+        const product = PRODUCTS.find((p) => p.id === line.productId);
+        return product ? [buildCartItem(product, line.quantity)] : [];
+      });
+
+      setCartItems(restored);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredAndSortedProducts = useMemo(() => {
     let filtered = PRODUCTS.filter(product =>
@@ -245,7 +295,7 @@ export default function App() {
 
     setCartItems(prevItems => {
       const existingItem = prevItems.find(item => item.id === targetProduct.id);
-      
+
       if (existingItem) {
         return prevItems.map(item =>
           item.id === targetProduct.id
@@ -253,16 +303,21 @@ export default function App() {
             : item
         );
       } else {
-        return [...prevItems, {
-          id: targetProduct.id,
-          name: targetProduct.name,
-          price: targetProduct.price,
-          priceValue: targetProduct.priceValue,
-          image: targetProduct.images[0],
-          quantity: quantityToAdd
-        }];
+        return [...prevItems, buildCartItem(targetProduct, quantityToAdd)];
       }
     });
+
+    // Sync to the API. The local update above already happened, so a failure
+    // here degrades to an unsynced cart rather than a broken interaction.
+    const serverCartId = cartIdRef.current;
+    if (serverCartId) {
+      apiAddItem(serverCartId, targetProduct.id, quantityToAdd);
+    } else {
+      resolveCartId().then((id) => {
+        cartIdRef.current = id;
+        if (id) apiAddItem(id, targetProduct.id, quantityToAdd);
+      });
+    }
   };
 
   const updateCartItemQuantity = (productId: number, quantity: number) => {
@@ -276,6 +331,11 @@ export default function App() {
             : item
         )
       );
+    }
+
+    const serverCartId = cartIdRef.current;
+    if (serverCartId) {
+      updateItem(serverCartId, productId, quantity);
     }
   };
 
@@ -327,6 +387,15 @@ export default function App() {
     // Show order confirmation and clear cart
     setViewMode('orderConfirmation');
     setCartItems([]);
+
+    // Empty the server cart and start a fresh one, so a reload after
+    // checkout does not resurrect the basket that was just paid for.
+    const serverCartId = cartIdRef.current;
+    if (serverCartId) {
+      resetCart(serverCartId).then((id) => {
+        cartIdRef.current = id;
+      });
+    }
   };
 
   const handleShopFromOrderConfirmation = () => {

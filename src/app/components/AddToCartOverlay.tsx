@@ -27,7 +27,7 @@ export default function AddToCartOverlay({ isVisible, product, quantity }: AddTo
         stiffness: 400,
         mass: 0.8
       }}
-      className="absolute bottom-0 left-0 right-0 h-[121px] z-50"
+      className="absolute bottom-0 left-0 right-0 h-[121px] z-50 pointer-events-none"
     >
       <div className="bg-[#426b1f] relative rounded-tl-[8px] rounded-tr-[8px] size-full">
         <div className="absolute bg-[#426b1f] h-[39px] left-0 top-[82px] w-[393px]" />

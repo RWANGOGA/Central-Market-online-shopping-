@@ -28,5 +28,6 @@ npm run dev --prefix api       # http://localhost:3000
 
 See `api/README.md` for the endpoint reference.
 
-The frontend still runs on its hardcoded catalogue and does not call the API
-yet.
+The frontend cart is connected to this API and survives a page refresh. The
+product catalogue is still hardcoded in `src/app/App.tsx`, so nothing calls
+`/api/products` yet.

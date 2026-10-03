@@ -30,4 +30,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src/app'),
     },
   },
+  server: {
+    // Proxy the API so the browser sees one origin in development. Without
+    // this, every request to /api would need CORS headers on the Next side.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
 })
