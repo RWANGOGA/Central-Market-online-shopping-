@@ -156,6 +156,7 @@ the cart rather than converting it into an order.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/geo/hierarchy` | Whole tree, plus per-level counts and whether outlines exist |
+| `GET` | `/api/geo/locate?place=&region=` | Resolve a place name to coordinates |
 | `GET` | `/api/geo/boundaries/regions` | ADM1 polygons, geoBoundaries gbOpen |
 | `GET` | `/api/geo/boundaries/districts` | ADM2 polygons, geoBoundaries gbOpen |
 | `GET` | `/api/payments/methods` | Channels and providers available in Uganda |
@@ -185,6 +186,33 @@ boundary file.
 ```bash
 npm run db:seed:geo --prefix api    # re-seed regions and districts
 ```
+
+### Locating a delivery address
+
+`/api/geo/locate` turns the district chosen at checkout into coordinates. It
+strips the kind suffix first, because the checkout stores names as "Kampala
+(City)" and "Mityana (Municipality)".
+
+It tries two sources:
+
+1. the seeded boundary data, which gives a real centroid, a bounding box and a
+   real outline
+2. `api/data/geo/town-centres.json`, a table of approximate district
+   headquarters coordinates for the districts the ADM2 layer omits
+
+The response says which one was used, in `source` and `precision`:
+
+| source | precision | hasOutline | meaning |
+| --- | --- | --- | --- |
+| `boundary` | `district-centroid` | true | real centroid, real outline |
+| `town-centre` | `town-centre` | false | approximate town coordinates |
+
+**The free-text street address is not geocoded.** A pin on this map marks the
+district or town centre, not the doorstep, and the map draws a dashed radius and
+says so in the caption rather than implying a precision the data does not have.
+Geocoding the address needs a service such as Nominatim, which means sending the
+customer address to a third party; that is a product and privacy decision rather
+than a code one.
 
 ### Payment channels
 

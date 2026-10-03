@@ -1,6 +1,6 @@
 import React from 'react';
 import svgPaths from "../imports/svg-x4vilrsbuo";
-import imgMapImage from "figma:asset/941aff148e69d99e908f044d27d961836c523499.png";
+import DeliveryLocationMap from './DeliveryLocationMap';
 
 interface OrderConfirmationPageProps {
   cartCount: number;
@@ -77,30 +77,12 @@ export default function OrderConfirmationPage({ cartCount, customerInfo, onShop,
             </div>
           </div>
 
-          {/* Interactive Delivery Map Card */}
-          <div className="relative rounded-2xl overflow-hidden border border-neutral-200 shadow-sm h-[225px] w-full">
-            <div
-              className="absolute inset-0 bg-cover bg-center"
-              style={{
-                backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.15)), url('${imgMapImage}')`
-              }}
-            />
-            {/* Delivery Pin with pulse */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-              <div className="relative">
-                <div className="absolute -inset-1 bg-[#426b1f]/30 rounded-full animate-ping" />
-                <div className="relative size-10 rounded-full bg-[#426b1f] text-white flex items-center justify-center shadow-lg border-2 border-white">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                  </svg>
-                </div>
-              </div>
-              <div className="mt-1 bg-white/95 px-2.5 py-0.5 rounded-full shadow-md text-[11px] font-['Inter:Medium',_sans-serif] text-[#426b1f] border border-neutral-100">
-                Fresh Dispatch Route
-              </div>
-            </div>
-          </div>
+          {/* Delivery location, on a real map centred on the chosen district */}
+          <DeliveryLocationMap
+            district={customerInfo.district}
+            region={customerInfo.region}
+            address={customerInfo.address}
+          />
 
           {/* Two-Column Delivery Info Grid matching Figma MyBasket-2001-1785 */}
           <div className="grid grid-cols-2 gap-4 pt-1 border-t border-neutral-100">

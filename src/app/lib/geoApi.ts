@@ -109,8 +109,46 @@ export function describePath(regions: GeoNode[], path: number[]): string {
   return names.length > 0 ? names.join(' / ') : 'All of Uganda';
 }
 
-export type Bbox = [south: number, west: number, north: number, east: number];
+export type LocatedPlace = {
+  name: string;
+  kind: string;
+  region: string | null;
+  centroid: { lat: number; lng: number };
+  bbox: { south: number; west: number; north: number; east: number } | null;
+  /** 'boundary' means a real centroid and outline, 'town-centre' is approximate. */
+  source: 'boundary' | 'town-centre';
+  hasOutline: boolean;
+  precision: 'district-centroid' | 'town-centre';
+};
 
+/**
+ * Resolve a place name typed at checkout into coordinates.
+ *
+ * Returns null when the name cannot be resolved or the API is unreachable, so
+ * the caller can fall back to a wider view rather than showing nothing.
+ */
+export async function locatePlace(
+  place: string,
+  region?: string,
+  signal?: AbortSignal,
+): Promise<LocatedPlace | null> {
+  if (!place.trim()) return null;
+
+  try {
+    const params = new URLSearchParams({ place });
+    if (region) params.set('region', region);
+
+    const response = await fetch(`/api/geo/locate?${params.toString()}`, { signal });
+    if (!response.ok) return null;
+
+    const body = (await response.json()) as { data: LocatedPlace };
+    return body.data;
+  } catch {
+    return null;
+  }
+}
+
+export type Bbox = [south: number, west: number, north: number, east: number];
 /**
  * Convert a node's bounding box into Leaflet's corner form and pad it so the
  * shape is not flush against the viewport edge. Returning null when there is no
