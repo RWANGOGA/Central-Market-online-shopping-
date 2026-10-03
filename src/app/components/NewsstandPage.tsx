@@ -16,63 +16,97 @@ interface Article {
   readTime: string;
   date: string;
   author: string;
+  source: string;
   summary: string;
   tag: string;
   heroColor: string;
 }
 
+/**
+ * Newest first, so the lead card is the most recent story. Sourced from
+ * Ugandan farm and market reporting; each entry credits its original outlet.
+ * Summaries are written for this app rather than lifted from the source.
+ */
 const ARTICLES: Article[] = [
   {
     id: '1',
-    category: 'Seasonal harvest',
-    title: 'Why Heirloom Tomatoes Taste Like Summer Itself',
+    category: 'Drought and irrigation',
+    title: 'Three-Quarters of an Acre of Tomatoes Earns an Agago Farmer Shs4.5m',
     readTime: '4 min read',
-    date: 'Oct 1, 2026',
-    author: 'Elena Vance, Agronomist',
-    summary: 'Unlike supermarket varieties bred primarily for shelf life and uniform shipping crates, heirloom cultivars preserve complex sugars and rich aromatics passed down generations.',
+    date: 'Oct 3, 2026',
+    author: 'Kamwokya Times',
+    source: 'Kamwokya Times',
+    summary: 'Titus Okello of Tee-Ogwang Village harvested through a prolonged dry spell on a government-supported micro-scale irrigation system, one of 14 smallholders in Agago District using them. The district received Shs618m under the programme in 2023/24, and government contributions are capped at Shs7.2m per acre.',
+    tag: 'Field Notes',
+    heroColor: 'bg-[#5c7f38]/10',
+  },
+  {
+    id: '2',
+    category: 'AgriTech',
+    title: 'Young Ugandan Innovators Split UGX 205m to Scale Farm Businesses',
+    readTime: '5 min read',
+    date: 'Oct 2, 2026',
+    author: 'Vivian Tumushabe',
+    source: 'Africa Agricultural Network',
+    summary: 'Heifer International Uganda awarded eight enterprises at the AYuTe Africa Challenge Season 5, with Piipu General Enterprises and Revmake Tech Company taking UGX 50m each. Entries rose sharply to 836 applications from 307 in 2025, and two female-led agribusinesses received UGX 10m apiece.',
     tag: 'Field Notes',
     heroColor: 'bg-[#426b1f]/10',
   },
   {
-    id: '2',
-    category: 'Farm partner spotlight',
-    title: 'Morning Dew at Kunisaki Farms: 3 Generations of Soil Stewards',
-    readTime: '6 min read',
-    date: 'Sep 27, 2026',
-    author: 'Marcus Reed',
-    summary: 'In Gilroy, CA, the Kunisaki family rotated cover crops and avoided synthetic fungicides long before organic certification became the industry gold standard.',
-    tag: 'Grower Story',
+    id: '3',
+    category: 'Commodity report',
+    title: 'Oilseed Crushers in Uganda Run Far Below Capacity on Thin Soybean Supply',
+    readTime: '3 min read',
+    date: 'Oct 2, 2026',
+    author: 'CMB News',
+    source: 'CMB News',
+    summary: 'One processor needing roughly 1,440 tonnes of oilseeds a year secured only about 240 tonnes in the past twelve months, around 17% of its requirement. Crushing capacity is expanding faster than planted area, and meteorological agencies project near-normal to above-normal rainfall for the September to December season.',
+    tag: 'Market Prices',
     heroColor: 'bg-[#8ca862]/15',
   },
   {
-    id: '3',
-    category: 'Kitchen craft',
-    title: 'Sweet Onions & Young Ginger: Quick Pickling for Crisp Autumn Salads',
+    id: '4',
+    category: 'Commodity report',
+    title: 'Coffee Exports Fell 13.6% by Volume in August as Firmer Prices Cushioned the Drop',
+    readTime: '4 min read',
+    date: 'Oct 1, 2026',
+    author: 'Ministry of Agriculture figures',
+    source: 'Uganda Business News',
+    summary: 'Uganda shipped 737,766 sixty-kilogram bags worth $181.7mn in August, against 853,543 bags a year earlier. The average export price rose to $4.10 per kilogram from $4.00 in July, and farm-gate robusta kiboko averaged Shs5,750 per kilogram, up from Shs5,500.',
+    tag: 'Market Prices',
+    heroColor: 'bg-[#8ca862]/15',
+  },
+  {
+    id: '5',
+    category: 'Grower profile',
+    title: 'From 80kg to 400kg an Acre: What Quality Seed Did for Stella Kwagala',
     readTime: '3 min read',
-    date: 'Sep 21, 2026',
-    author: 'Chef Maya Lin',
-    summary: 'A 10-minute rice wine brine transforms fresh crisp radishes and tender ginger into vibrant table condiments that brighten any weeknight dinner.',
-    tag: 'Recipe',
+    date: 'Oct 1, 2026',
+    author: 'Ugnewsline',
+    source: 'Ugnewsline',
+    summary: 'The 32-year-old Buluguyi farmer in Bugiri District collected 983kg of soybean from two acres in Season A 2025 and sold 800kg at UGX 2,000 per kilogram. She expanded to two and a half acres the following season, harvested 1,240kg, and used the UGX 2m to help buy a Bajaj motorcycle for boda work in Kampala.',
+    tag: 'Grower Story',
     heroColor: 'bg-[#5c7f38]/10',
   },
   {
-    id: '4',
-    category: 'Zero waste pantry',
-    title: 'Never Toss Kale Stems: Charred Relish & Garden Pestos',
-    readTime: '5 min read',
-    date: 'Sep 14, 2026',
-    author: 'Mu Katale Editorial',
-    summary: 'Simple techniques from our kitchen lab to make sure every leaf, stem, and root from your weekly delivery basket finds a delicious purpose.',
-    tag: 'Sustainability',
+    id: '6',
+    category: 'Market policy',
+    title: 'Kampala Traders Raise Flooding and Rent Concerns, KCCA Promises a Response',
+    readTime: '4 min read',
+    date: 'Sep 30, 2026',
+    author: 'Shabibah Nakirigya',
+    source: 'Daily Monitor',
+    summary: 'Traders meeting KCCA at Kitante Primary School listed flooding, high rents, poor planning and taxis blocking shopfronts as their biggest pressures. KCCA Executive Director Sharifah Buzeki committed to reviewing flood compensation, market space and landlord relations, and said 550 vacant spaces sit in government markets at Wandegeya, Rusafi, Nakawa and Luzira.',
+    tag: 'Market News',
     heroColor: 'bg-[#426b1f]/10',
-  }
+  },
 ];
 
 export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCount }: NewsstandPageProps) {
   const [selectedCategory, setSelectedCategory] = React.useState<string>('All');
   const [bookmarkedIds, setBookmarkedIds] = React.useState<Set<string>>(new Set());
 
-  const categories = ['All', 'Field Notes', 'Grower Story', 'Recipe'];
+  const categories = ['All', 'Market News', 'Market Prices', 'Field Notes', 'Grower Story'];
 
   const filteredArticles = selectedCategory === 'All' 
     ? ARTICLES 
@@ -221,9 +255,11 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
                 <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[20px]">
                   {filteredArticles[0].summary}
                 </p>
-                <div className="pt-2 flex items-center justify-between text-[12px] text-[#757575] font-['Inter:Regular',_sans-serif] border-t border-neutral-100">
-                  <span>{filteredArticles[0].author}</span>
-                  <span className="text-[#426b1f] font-medium">{filteredArticles[0].readTime}</span>
+                <div className="pt-2 flex items-center justify-between gap-2 text-[12px] text-[#757575] font-['Inter:Regular',_sans-serif] border-t border-neutral-100">
+                  <span className="truncate">{filteredArticles[0].author}</span>
+                  <span className="shrink-0 text-[#426b1f] font-medium">
+                    {filteredArticles[0].source} · {filteredArticles[0].readTime}
+                  </span>
                 </div>
               </div>
             </div>
@@ -256,9 +292,9 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
                 <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] leading-[18px] line-clamp-2">
                   {article.summary}
                 </p>
-                <div className="pt-2 flex items-center justify-between text-[11px] text-[#757575] font-['Inter:Regular',_sans-serif]">
-                  <span>{article.date}</span>
-                  <span className="text-[#426b1f] font-medium">{article.readTime}</span>
+                <div className="pt-2 flex items-center justify-between gap-2 text-[11px] text-[#757575] font-['Inter:Regular',_sans-serif]">
+                  <span className="truncate">{article.source}</span>
+                  <span className="shrink-0">{article.date} · {article.readTime}</span>
                 </div>
               </div>
             ))}
@@ -270,7 +306,7 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
               Mu Katale Gazette • Issue No. 42
             </p>
             <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575]">
-              Published bi-weekly for community members supporting organic and regenerative soil farming.
+              Reporting on Ugandan farms and markets. Each story credits its original outlet.
             </p>
           </div>
         </div>
