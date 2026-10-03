@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import svgPaths from "../imports/svg-toln6of0ig";
 import { Input } from './ui/input';
+import {
+  REGION_NAMES,
+  placesInRegion,
+  formatPlace,
+  isValidUgandanPhone,
+  normalizeUgandanPhone,
+} from '../lib/uganda';
 
 interface CheckoutPageProps {
   cartCount: number;
@@ -12,153 +19,63 @@ interface CheckoutPageProps {
 
 interface CustomerInfo {
   fullName: string;
+  phone: string;
+  region: string;
+  district: string;
   address: string;
-  city: string;
-  country: string;
-  state: string;
-  zipCode: string;
-}
-
-const COUNTRIES = [
-  'United States',
-  'Canada',
-  'United Kingdom',
-  'Australia',
-  'Germany',
-  'France',
-  'Japan',
-  'Other'
-];
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut',
-  'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
-  'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
-  'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
-  'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio',
-  'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
-  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia',
-  'Wisconsin', 'Wyoming'
-];
-
-// Zip code validation function
-function validateZipCode(zipCode: string, country: string): boolean {
-  if (!zipCode.trim()) return false;
-  
-  switch (country) {
-    case 'United States':
-      // US: 5 digits or 5+4 format (12345 or 12345-6789)
-      return /^(\d{5}|\d{5}-\d{4})$/.test(zipCode.trim());
-    
-    case 'Canada':
-      // Canada: A1A 1A1 format
-      return /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(zipCode.trim());
-    
-    case 'United Kingdom':
-      // UK: Various formats like SW1A 1AA, M1 1AA, etc.
-      return /^[A-Za-z]{1,2}\d[A-Za-z\d]?\s?\d[A-Za-z]{2}$/.test(zipCode.trim());
-    
-    case 'Germany':
-      // Germany: 5 digits
-      return /^\d{5}$/.test(zipCode.trim());
-    
-    case 'France':
-      // France: 5 digits
-      return /^\d{5}$/.test(zipCode.trim());
-    
-    case 'Australia':
-      // Australia: 4 digits
-      return /^\d{4}$/.test(zipCode.trim());
-    
-    case 'Japan':
-      // Japan: 7 digits with optional hyphen (123-4567 or 1234567)
-      return /^(\d{3}-?\d{4})$/.test(zipCode.trim());
-    
-    default:
-      // For other countries, accept any non-empty alphanumeric string of 3-10 characters
-      return /^[A-Za-z0-9\s-]{3,10}$/.test(zipCode.trim());
-  }
 }
 
 export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuClick, onProceedToPayment }: CheckoutPageProps) {
   const [formData, setFormData] = useState<CustomerInfo>(customerInfo);
 
-  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
-  const [showStateDropdown, setShowStateDropdown] = useState(false);
-  const [zipCodeTouched, setZipCodeTouched] = useState(false);
+  const [showRegionDropdown, setShowRegionDropdown] = useState(false);
+  const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
+  const [phoneTouched, setPhoneTouched] = useState(false);
 
   // Update form data when customerInfo prop changes
   useEffect(() => {
     setFormData(customerInfo);
   }, [customerInfo]);
 
-  // Check if zip code is valid
-  const isZipCodeValid = validateZipCode(formData.zipCode, formData.country);
-  const showZipCodeError = zipCodeTouched && formData.zipCode.trim() !== '' && !isZipCodeValid;
+  // Switching region invalidates the district, since districts belong to a region.
+  useEffect(() => {
+    setShowDistrictDropdown(false);
+  }, [formData.region]);
 
-  // Check if all required fields are filled and valid
-  const isFormValid = formData.fullName.trim() !== '' &&
-                     formData.address.trim() !== '' &&
-                     formData.city.trim() !== '' &&
-                     formData.country !== '' &&
-                     formData.state !== '' &&
-                     formData.zipCode.trim() !== '' &&
-                     isZipCodeValid;
+  const districtOptions = placesInRegion(formData.region);
+  const showPhoneError = phoneTouched && formData.phone.trim() !== '' && !isValidUgandanPhone(formData.phone);
+
+  const isFormValid =
+    formData.fullName.trim().length > 1 &&
+    isValidUgandanPhone(formData.phone) &&
+    formData.region !== '' &&
+    formData.district !== '' &&
+    formData.address.trim().length > 3;
 
   const updateFormField = (field: keyof CustomerInfo, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleCountrySelect = (country: string) => {
-    updateFormField('country', country);
-    setShowCountryDropdown(false);
-    // Reset state when country changes
-    if (country !== 'United States') {
-      updateFormField('state', '');
-    }
-    // Reset zip code validation when country changes
-    if (formData.zipCode.trim() !== '') {
-      setZipCodeTouched(true);
-    }
+  const handleRegionSelect = (region: string) => {
+    setFormData((prev) => ({ ...prev, region, district: '' }));
+    setShowRegionDropdown(false);
   };
 
-  const handleStateSelect = (state: string) => {
-    updateFormField('state', state);
-    setShowStateDropdown(false);
+  const handleDistrictSelect = (district: string) => {
+    updateFormField('district', district);
+    setShowDistrictDropdown(false);
   };
 
-  const handleZipCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateFormField('zipCode', e.target.value);
-    setZipCodeTouched(true);
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    updateFormField('phone', e.target.value);
+    setPhoneTouched(true);
   };
 
   const handleProceedToPayment = () => {
-    if (isFormValid) {
-      onProceedToPayment(formData);
-    }
-  };
+    if (!isFormValid) return;
 
-  const getZipCodePlaceholder = (country: string): string => {
-    switch (country) {
-      case 'United States':
-        return 'Enter zip code (e.g., 12345 or 12345-6789)';
-      case 'Canada':
-        return 'Enter postal code (e.g., A1A 1A1)';
-      case 'United Kingdom':
-        return 'Enter postcode (e.g., SW1A 1AA)';
-      case 'Germany':
-      case 'France':
-        return 'Enter postal code (5 digits)';
-      case 'Australia':
-        return 'Enter postcode (4 digits)';
-      case 'Japan':
-        return 'Enter postal code (e.g., 123-4567)';
-      default:
-        return 'Enter postal/zip code';
-    }
+    const phone = normalizeUgandanPhone(formData.phone);
+    onProceedToPayment({ ...formData, phone: phone ?? formData.phone, fullName: formData.fullName.trim() });
   };
 
   return (
@@ -193,147 +110,89 @@ export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuCl
       {/* Shipping Description */}
       <div className="absolute flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] left-6 not-italic text-[#000000] text-[16px] text-left text-nowrap top-[258px] translate-y-[-50%]">
         <p className="block leading-[1.5] whitespace-pre text-[16px]">
-          The address your order will ship to
+          Where in Uganda should we deliver?
         </p>
       </div>
       
-      {/* Form Fields */}
-      <div className="absolute left-6 right-6 top-[286px]">
-        <div className="box-border content-stretch flex flex-col gap-2 items-start justify-start p-0 relative w-full">
-          
-          {/* Full Name */}
-          <FormField label="Full name">
-            <Input
-              value={formData.fullName}
-              onChange={(e) => updateFormField('fullName', e.target.value)}
-              placeholder="Enter your full name"
-              className="bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-[18px] w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000]"
-            />
-          </FormField>
-          
-          {/* Address */}
-          <FormField label="Address">
-            <Input
-              value={formData.address}
-              onChange={(e) => updateFormField('address', e.target.value)}
-              placeholder="Enter your street address"
-              className="bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-3 w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000]"
-            />
-          </FormField>
-          
-          {/* City */}
-          <FormField label="City">
-            <Input
-              value={formData.city}
-              onChange={(e) => updateFormField('city', e.target.value)}
-              placeholder="Enter your city"
-              className="bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-3 w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000]"
-            />
-          </FormField>
-          
-          {/* Country Dropdown */}
-          <FormField label="Country">
-            <div className="relative w-full">
-              <button
-                onClick={() => setShowCountryDropdown(!showCountryDropdown)}
-                className="bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000] flex items-center justify-between"
-              >
-                <span className="text-left font-normal text-[12px]">{formData.country || 'Select country'}</span>
-                <div className="flex h-[4px] items-center justify-center relative shrink-0 w-[7px]">
-                  <div className="flex-none rotate-[90deg]">
-                    <div className="h-[7px] relative w-[3.5px]">
-                      <div className="absolute bottom-[-5.051%] left-[-10.101%] right-[-20.203%] top-[-5.051%]">
-                        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 9">
-                          <path d="M1 1L4.5 4.5L1 8" stroke="var(--stroke-0, black)" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </button>
-              {showCountryDropdown && (
-                <div className="absolute top-full left-0 right-0 bg-white border border-neutral-200 rounded-lg mt-1 max-h-48 overflow-y-auto z-50">
-                  {COUNTRIES.map((country) => (
-                    <button
-                      key={country}
-                      onClick={() => handleCountrySelect(country)}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-50 font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000]"
-                    >
-                      {country}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </FormField>
-          
-          {/* State Dropdown */}
-          <FormField label="State">
-            <div className="relative w-full">
-              <button
-                onClick={() => formData.country === 'United States' && setShowStateDropdown(!showStateDropdown)}
-                disabled={formData.country !== 'United States'}
-                className={`bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px] flex items-center justify-between ${
-                  formData.country !== 'United States' ? 'text-[#757575] cursor-not-allowed' : 'text-[#000000]'
-                }`}
-              >
-                <span className="text-left font-normal text-[12px]">
-                  {formData.country === 'United States' 
-                    ? (formData.state || 'Select state') 
-                    : 'N/A for selected country'
-                  }
-                </span>
-                {formData.country === 'United States' && (
-                  <div className="flex h-[4px] items-center justify-center relative shrink-0 w-[7px]">
-                    <div className="flex-none rotate-[90deg]">
-                      <div className="h-[7px] relative w-[3.5px]">
-                        <div className="absolute bottom-[-5.051%] left-[-10.101%] right-[-20.203%] top-[-5.051%]">
-                          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 6 9">
-                            <path d="M1 1L4.5 4.5L1 8" stroke="var(--stroke-0, black)" />
-                        </svg>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </button>
-              {showStateDropdown && formData.country === 'United States' && (
-                <div className="absolute top-full left-0 right-0 bg-white border border-neutral-200 rounded-lg mt-1 max-h-48 overflow-y-auto z-50">
-                  {US_STATES.map((state) => (
-                    <button
-                      key={state}
-                      onClick={() => handleStateSelect(state)}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-50 font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000]"
-                    >
-                      {state}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </FormField>
-          
-          {/* Zip Code */}
-          <FormField label="Zip Code">
-            <div className="relative w-full">
+{/* Form Fields */}
+      <div className="absolute left-0 right-0 top-[286px] bottom-[124px] overflow-y-auto">
+        <div className="px-6 pb-6 pt-1">
+          <div className="box-border content-stretch flex flex-col gap-2 items-start justify-start p-0 relative w-full">
+
+            {/* Full Name */}
+            <FormField label="Full name">
               <Input
-                value={formData.zipCode}
-                onChange={handleZipCodeChange}
-                placeholder={getZipCodePlaceholder(formData.country)}
-                className={`bg-[#ffffff] border rounded-lg px-4 py-3 w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000] ${
-                  showZipCodeError ? 'border-red-500' : 'border-neutral-200'
-                }`}
+                value={formData.fullName}
+                onChange={(e) => updateFormField('fullName', e.target.value)}
+                placeholder="e.g. Namukasa Allen"
+                autoComplete="name"
+                className="bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000]"
               />
-              {showZipCodeError && (
-                <div className="mt-1 text-red-500 text-[12px] font-['Inter:Regular',_sans-serif]">
-                  Please enter a valid {formData.country === 'United States' ? 'zip code' : 
-                                      formData.country === 'Canada' ? 'postal code' :
-                                      formData.country === 'United Kingdom' ? 'postcode' :
-                                      'postal/zip code'} for {formData.country || 'your country'}
-                </div>
-              )}
-            </div>
-          </FormField>
+            </FormField>
+
+            {/* Phone */}
+            <FormField label="Phone number">
+              <div className="w-full">
+                <Input
+                  value={formData.phone}
+                  onChange={handlePhoneChange}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="07XX XXX XXX"
+                  className={`bg-[#ffffff] border rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000] ${
+                    showPhoneError ? 'border-red-500' : 'border-neutral-200'
+                  }`}
+                />
+                {showPhoneError && (
+                  <p className="mt-1 text-red-500 text-[12px] font-['Inter:Regular',_sans-serif]">
+                    Enter a Ugandan number, for example 0772 123 456
+                  </p>
+                )}
+              </div>
+            </FormField>
+
+            {/* Region */}
+            <FormField label="Region">
+              <Select
+                label="Select region"
+                value={formData.region}
+                options={REGION_NAMES}
+                open={showRegionDropdown}
+                onToggle={() => setShowRegionDropdown((open) => !open)}
+                onSelect={handleRegionSelect}
+              />
+            </FormField>
+
+            {/* District / town */}
+            <FormField label="District, municipality or town">
+              <Select
+                label={formData.region ? 'Select district or town' : 'Choose a region first'}
+                value={formData.district}
+                options={districtOptions.map(formatPlace)}
+                open={showDistrictDropdown}
+                disabled={!formData.region}
+                emptyText="No districts listed for this region"
+                onToggle={() => formData.region && setShowDistrictDropdown((open) => !open)}
+                onSelect={handleDistrictSelect}
+              />
+            </FormField>
+
+            {/* Delivery address */}
+            <FormField label="Delivery address and landmark">
+              <Input
+                value={formData.address}
+                onChange={(e) => updateFormField('address', e.target.value)}
+                placeholder="Plot number, street and nearest landmark"
+                autoComplete="street-address"
+                className="bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px] text-[#000000]"
+              />
+            </FormField>
+
+            <p className="pt-1 text-[12px] leading-[18px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+              Our rider calls the number above before delivery. Orders to Kampala and Wakiso are
+              delivered same day for orders placed before 4pm.
+            </p>
+          </div>
         </div>
       </div>
       
@@ -360,6 +219,93 @@ function FormField({ label, children }: FormFieldProps) {
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+interface SelectProps {
+  value: string;
+  options: string[];
+  open: boolean;
+  label: string;
+  disabled?: boolean;
+  emptyText?: string;
+  onToggle: () => void;
+  onSelect: (value: string) => void;
+}
+
+/**
+ * A dropdown that opens upward when there is not enough room below, so the
+ * last field in the form still shows its full list instead of being cut off
+ * by the footer.
+ */
+function Select({ value, options, open, label, disabled, emptyText, onToggle, onSelect }: SelectProps) {
+  const [openUp, setOpenUp] = useState(false);
+
+  // Measure on open so the list never renders underneath the footer button.
+  useEffect(() => {
+    if (!open) return;
+    const element = document.querySelector('[data-select-trigger]');
+    if (!element) return;
+
+    const rect = element.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    setOpenUp(spaceBelow < 220);
+  }, [open]);
+
+  return (
+    <div className="relative w-full">
+      <button
+        data-select-trigger
+        type="button"
+        onClick={onToggle}
+        disabled={disabled}
+        aria-expanded={open}
+        className={`bg-[#ffffff] border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px] flex items-center justify-between ${
+          disabled ? 'text-[#9a9a9a] cursor-not-allowed' : 'text-[#000000] cursor-pointer'
+        }`}
+      >
+        <span className={`text-left font-normal text-[12px] truncate ${value ? '' : 'text-[#9a9a9a]'}`}>
+          {value || label}
+        </span>
+        {!disabled && (
+          <svg
+            className={`shrink-0 w-3 h-3 transition-transform ${open && !openUp ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 12 8"
+            aria-hidden="true"
+          >
+            <path d="M1 1.5L6 6.5L11 1.5" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+
+      {open && !disabled && (
+        <div
+          className={`absolute left-0 right-0 bg-white border border-neutral-200 rounded-lg max-h-52 overflow-y-auto z-50 ${
+            openUp ? 'bottom-full mb-1' : 'top-full mt-1'
+          }`}
+        >
+          {options.length === 0 ? (
+            <p className="px-4 py-3 text-[13px] text-[#9a9a9a] font-['Inter:Regular',_sans-serif]">
+              {emptyText ?? 'Nothing to choose yet'}
+            </p>
+          ) : (
+            options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onSelect(option)}
+                className={`w-full px-4 py-2 text-left hover:bg-[#426b1f]/5 font-['Inter:Regular',_sans-serif] text-[13px] ${
+                  option === value ? 'text-[#426b1f] font-medium' : 'text-[#000000]'
+                }`}
+              >
+                {option}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

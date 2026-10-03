@@ -23,7 +23,7 @@ import AboutPage from './components/AboutPage';
 import ProfilePage from './components/ProfilePage';
 import AddToCartOverlay from './components/AddToCartOverlay';
 import Menu from './components/Menu';
-import { resolveCartId, addItem as apiAddItem, updateItem, resetCart } from './lib/cartApi';
+import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './lib/cartApi';
 
 // Enhanced product data with descriptions and locations
 const PRODUCTS = [
@@ -157,11 +157,10 @@ interface OverlayProduct {
 
 interface CustomerInfo {
   fullName: string;
+  phone: string;
+  region: string;
+  district: string;
   address: string;
-  city: string;
-  country: string;
-  state: string;
-  zipCode: string;
 }
 
 /**
@@ -192,11 +191,10 @@ export default function App() {
   // Customer information from checkout
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     fullName: '',
-    address: '',
-    city: '',
-    country: '',
-    state: '',
-    zipCode: ''
+    phone: '',
+    region: '',
+    district: '',
+    address: ''
   });
   
   // Add to cart overlay state
@@ -404,11 +402,10 @@ export default function App() {
     // Reset customer info for new order
     setCustomerInfo({
       fullName: '',
-      address: '',
-      city: '',
-      country: '',
-      state: '',
-      zipCode: ''
+      phone: '',
+      region: '',
+      district: '',
+      address: ''
     });
   };
 

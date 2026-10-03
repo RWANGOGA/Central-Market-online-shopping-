@@ -11,11 +11,10 @@ interface OrderConfirmationPageProps {
 
 interface CustomerInfo {
   fullName: string;
+  phone: string;
+  region: string;
+  district: string;
   address: string;
-  city: string;
-  country: string;
-  state: string;
-  zipCode: string;
 }
 
 export default function OrderConfirmationPage({ cartCount, customerInfo, onShop, onMenuClick }: OrderConfirmationPageProps) {
@@ -38,9 +37,8 @@ export default function OrderConfirmationPage({ cartCount, customerInfo, onShop,
     const addressParts = [
       customerInfo.fullName,
       customerInfo.address,
-      customerInfo.city,
-      customerInfo.state && customerInfo.country === 'United States' ? `${customerInfo.state}, ${customerInfo.zipCode}` : customerInfo.zipCode,
-      customerInfo.country
+      [customerInfo.district, customerInfo.region].filter(Boolean).join(', '),
+      customerInfo.phone
     ].filter(part => part && part.trim() !== '');
 
     return addressParts;

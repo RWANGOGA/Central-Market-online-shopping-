@@ -5,11 +5,10 @@ import { formatUgx } from "../lib/currency";
 
 interface CustomerInfo {
   fullName: string;
+  phone: string;
+  region: string;
+  district: string;
   address: string;
-  city: string;
-  country: string;
-  state: string;
-  zipCode: string;
 }
 
 interface ProfilePageProps {
@@ -35,12 +34,11 @@ export default function ProfilePage({
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Fallback details if customer hasn't purchased yet
-  const displayName = customerInfo.fullName.trim() || 'Sho Kuwamoto';
-  const displayAddress = customerInfo.address.trim() || '123 Quiet Grove Rd.';
-  const displayCity = customerInfo.city.trim() || 'Los Angeles';
-  const displayState = customerInfo.state.trim() || 'California';
-  const displayZip = customerInfo.zipCode.trim() || '90210';
-  const displayCountry = customerInfo.country.trim() || 'United States';
+  const displayName = customerInfo.fullName.trim() || 'Guest shopper';
+  const displayPhone = customerInfo.phone.trim() || 'No number saved';
+  const displayAddress = customerInfo.address.trim() || 'No delivery address saved';
+  const displayPlace = [customerInfo.district, customerInfo.region].filter(Boolean).join(', ');
+  const displayPlaceOrDefault = displayPlace || 'Kampala, Central Region';
 
   const handleSave = () => {
     onUpdateCustomerInfo(editedInfo);
@@ -203,11 +201,10 @@ export default function ProfilePage({
                     else {
                       setEditedInfo({
                         fullName: displayName,
-                        address: displayAddress,
-                        city: displayCity,
-                        state: displayState,
-                        zipCode: displayZip,
-                        country: displayCountry
+                        phone: customerInfo.phone,
+                        region: customerInfo.region,
+                        district: customerInfo.district,
+                        address: customerInfo.address
                       });
                       setIsEditing(true);
                     }
@@ -238,22 +235,34 @@ export default function ProfilePage({
                       className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
                     />
                   </div>
+                  <div>
+                    <label className="text-[12px] text-[#757575] block mb-1">Phone number</label>
+                    <input
+                      type="tel"
+                      value={editedInfo.phone}
+                      onChange={(e) => setEditedInfo({ ...editedInfo, phone: e.target.value })}
+                      placeholder="07XX XXX XXX"
+                      className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[12px] text-[#757575] block mb-1">City</label>
+                      <label className="text-[12px] text-[#757575] block mb-1">Region</label>
                       <input
                         type="text"
-                        value={editedInfo.city}
-                        onChange={(e) => setEditedInfo({ ...editedInfo, city: e.target.value })}
+                        value={editedInfo.region}
+                        onChange={(e) => setEditedInfo({ ...editedInfo, region: e.target.value })}
+                        placeholder="Central Region"
                         className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
                       />
                     </div>
                     <div>
-                      <label className="text-[12px] text-[#757575] block mb-1">Zip / Postal Code</label>
+                      <label className="text-[12px] text-[#757575] block mb-1">District / town</label>
                       <input
                         type="text"
-                        value={editedInfo.zipCode}
-                        onChange={(e) => setEditedInfo({ ...editedInfo, zipCode: e.target.value })}
+                        value={editedInfo.district}
+                        onChange={(e) => setEditedInfo({ ...editedInfo, district: e.target.value })}
+                        placeholder="Kampala"
                         className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
                       />
                     </div>
@@ -262,9 +271,9 @@ export default function ProfilePage({
               ) : (
                 <div className="space-y-1 font-['Inter:Regular',_sans-serif] text-[14px] text-[#000000] leading-[22px]">
                   <p className="font-medium">{displayName}</p>
+                  <p className="text-[#757575]">{displayPhone}</p>
                   <p className="text-[#757575]">{displayAddress}</p>
-                  <p className="text-[#757575]">{displayCity}, {displayState} {displayZip}</p>
-                  <p className="text-[#757575]">{displayCountry}</p>
+                  <p className="text-[#757575]">{displayPlaceOrDefault}</p>
                 </div>
               )}
             </div>
