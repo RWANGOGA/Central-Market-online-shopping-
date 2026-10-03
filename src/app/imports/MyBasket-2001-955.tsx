@@ -515,7 +515,7 @@ function MobileNav() {
         style={{ left: "calc(50% - 0.5px)" }}
       >
         <p className="adjustLetterSpacing block leading-none whitespace-pre">
-          World Peas
+          Mu Katale
         </p>
       </div>
       <CartIcon />

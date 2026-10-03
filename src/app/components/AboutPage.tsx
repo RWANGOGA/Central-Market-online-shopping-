@@ -54,7 +54,7 @@ export default function AboutPage({ onBack, onMenuClick, onCartClick, cartCount 
             className="absolute flex flex-col font-['Newsreader:Medium',_sans-serif] font-medium justify-center leading-[0] text-[#426b1f] text-[24px] text-center text-nowrap top-9 tracking-[-0.24px] translate-x-[-50%] translate-y-[-50%]"
             style={{ left: "calc(50% - 0.5px)" }}
           >
-            <p className="adjustLetterSpacing block leading-none whitespace-pre text-[24px]">World Peas</p>
+            <p className="adjustLetterSpacing block leading-none whitespace-pre text-[24px]">Mu Katale</p>
           </div>
 
           {/* Cart Icon */}
@@ -137,14 +137,14 @@ export default function AboutPage({ onBack, onMenuClick, onCartClick, cartCount 
               Rebuilding community food systems from the ground up.
             </h2>
             <p className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] leading-[22px]">
-              "World Peas" began with a simple question: why do grocery tomatoes travel 1,500 miles when flavorful heritage varieties grow in neighboring valleys? We partner directly with organic family farms to harvest when ripe, not when hard.
+              "Mu Katale" began with a simple question: why do grocery tomatoes travel 1,500 miles when flavorful heritage varieties grow in neighboring valleys? We partner directly with organic family farms to harvest when ripe, not when hard.
             </p>
           </div>
 
           {/* Pillars of our Standard */}
           <div className="space-y-3">
             <h3 className="font-['Inter:Medium',_sans-serif] text-[16px] text-[#000000] tracking-[-0.16px]">
-              The World Peas Standard
+              The Mu Katale Standard
             </h3>
             <div className="grid grid-cols-1 gap-3">
               {VALUES.map((item, idx) => (

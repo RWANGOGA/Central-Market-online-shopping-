@@ -26,7 +26,7 @@ export default function PlaceholderPage({ title, onBack, onMenuClick, cartCount 
             className="absolute css-v5bt0j flex flex-col font-['Newsreader:Medium',_sans-serif] font-medium justify-center leading-[0] text-[#426b1f] text-[24px] text-center text-nowrap top-9 tracking-[-0.24px] translate-x-[-50%] translate-y-[-50%]"
             style={{ left: "calc(50% - 0.5px)" }}
           >
-            <p className="adjustLetterSpacing block leading-none whitespace-pre">World Peas</p>
+            <p className="adjustLetterSpacing block leading-none whitespace-pre">Mu Katale</p>
           </div>
           
           {/* Cart Icon */}

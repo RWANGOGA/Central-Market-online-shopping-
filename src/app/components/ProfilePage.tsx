@@ -65,7 +65,7 @@ export default function ProfilePage({
             className="absolute flex flex-col font-['Newsreader:Medium',_sans-serif] font-medium justify-center leading-[0] text-[#426b1f] text-[24px] text-center text-nowrap top-9 tracking-[-0.24px] translate-x-[-50%] translate-y-[-50%]"
             style={{ left: "calc(50% - 0.5px)" }}
           >
-            <p className="adjustLetterSpacing block leading-none whitespace-pre text-[24px]">World Peas</p>
+            <p className="adjustLetterSpacing block leading-none whitespace-pre text-[24px]">Mu Katale</p>
           </div>
 
           {/* Cart Icon */}

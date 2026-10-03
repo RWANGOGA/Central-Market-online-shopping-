@@ -61,7 +61,7 @@ const ARTICLES: Article[] = [
     title: 'Never Toss Kale Stems: Charred Relish & Garden Pestos',
     readTime: '5 min read',
     date: 'Sep 14, 2026',
-    author: 'World Peas Editorial',
+    author: 'Mu Katale Editorial',
     summary: 'Simple techniques from our kitchen lab to make sure every leaf, stem, and root from your weekly delivery basket finds a delicious purpose.',
     tag: 'Sustainability',
     heroColor: 'bg-[#426b1f]/10',
@@ -104,7 +104,7 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
             className="absolute flex flex-col font-['Newsreader:Medium',_sans-serif] font-medium justify-center leading-[0] text-[#426b1f] text-[24px] text-center text-nowrap top-9 tracking-[-0.24px] translate-x-[-50%] translate-y-[-50%]"
             style={{ left: "calc(50% - 0.5px)" }}
           >
-            <p className="adjustLetterSpacing block leading-none whitespace-pre text-[24px]">World Peas</p>
+            <p className="adjustLetterSpacing block leading-none whitespace-pre text-[24px]">Mu Katale</p>
           </div>
 
           {/* Cart Icon */}
@@ -267,7 +267,7 @@ export default function NewsstandPage({ onBack, onMenuClick, onCartClick, cartCo
           {/* Community Bulletin Note */}
           <div className="bg-[#f8f9fa] border border-neutral-200 rounded-xl p-4 text-center space-y-1">
             <p className="font-['Newsreader:Regular',_sans-serif] text-[16px] text-[#426b1f]">
-              World Peas Gazette • Issue No. 42
+              Mu Katale Gazette • Issue No. 42
             </p>
             <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575]">
               Published bi-weekly for community members supporting organic and regenerative soil farming.
