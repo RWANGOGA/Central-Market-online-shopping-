@@ -1,0 +1,2482 @@
+{
+  "regions": [
+    {
+      "name": "Northern Region",
+      "iso": "UG-N",
+      "centroid": [
+        32.516,
+        2.5197
+      ],
+      "bbox": [
+        30.7404,
+        1.3652,
+        35.0003,
+        4.2341
+      ]
+    },
+    {
+      "name": "Eastern Region",
+      "iso": "UG-E",
+      "centroid": [
+        33.776,
+        0.7328
+      ],
+      "bbox": [
+        32.8195,
+        -0.1639,
+        34.8314,
+        2.4189
+      ]
+    },
+    {
+      "name": "Central Region",
+      "iso": "UG-C",
+      "centroid": [
+        32.4444,
+        0.0669
+      ],
+      "bbox": [
+        31.0124,
+        -1.0281,
+        33.4156,
+        1.6777
+      ]
+    },
+    {
+      "name": "Western Region",
+      "iso": "UG-W",
+      "centroid": [
+        30.6335,
+        0.4918
+      ],
+      "bbox": [
+        29.5734,
+        -1.4823,
+        32.3629,
+        2.3719
+      ]
+    }
+  ],
+  "districts": [
+    {
+      "name": "Dodoth",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        34.0524,
+        3.5083
+      ],
+      "bbox": [
+        33.5131,
+        3.0793,
+        34.5546,
+        4.2284
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Chua",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        33.1654,
+        3.362
+      ],
+      "bbox": [
+        32.7039,
+        3.0946,
+        33.7426,
+        3.7657
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Lamwo",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.7007,
+        3.4105
+      ],
+      "bbox": [
+        32.1959,
+        3.1653,
+        33.3042,
+        3.8779
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Aruu",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.8262,
+        2.8784
+      ],
+      "bbox": [
+        32.4643,
+        2.5584,
+        33.1245,
+        3.2712
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Agago",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        33.2443,
+        2.8833
+      ],
+      "bbox": [
+        32.7961,
+        2.6023,
+        33.5907,
+        3.3319
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Jie",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        33.9235,
+        2.8951
+      ],
+      "bbox": [
+        33.5409,
+        2.6361,
+        34.3602,
+        3.3631
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Labwor",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        33.7159,
+        2.7718
+      ],
+      "bbox": [
+        33.5219,
+        2.4723,
+        34.003,
+        3.1535
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Matheniko",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        34.6468,
+        2.4714
+      ],
+      "bbox": [
+        34.2527,
+        2.131,
+        34.9536,
+        3.1053
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bokora",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        34.0405,
+        2.5339
+      ],
+      "bbox": [
+        33.6339,
+        1.8805,
+        34.5873,
+        2.9231
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Pian",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        34.5735,
+        2.0468
+      ],
+      "bbox": [
+        34.2136,
+        1.6456,
+        34.7915,
+        2.4414
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Chekwii",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        34.5866,
+        1.7628
+      ],
+      "bbox": [
+        34.2287,
+        1.5574,
+        34.8466,
+        2.0989
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Pokot",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        34.7886,
+        1.7582
+      ],
+      "bbox": [
+        34.6252,
+        1.3588,
+        35.0268,
+        2.2855
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Usuk",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.8853,
+        1.9503
+      ],
+      "bbox": [
+        33.7917,
+        1.6369,
+        34.2136,
+        2.3155
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Soroti",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.6071,
+        1.8786
+      ],
+      "bbox": [
+        33.3812,
+        1.5625,
+        33.8067,
+        2.0404
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Soroti",
+      "kind": "City",
+      "region": "Eastern Region",
+      "centroid": [
+        33.7214,
+        2.1917
+      ],
+      "bbox": [
+        33.4798,
+        1.9459,
+        33.9041,
+        2.4311
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Amuria",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.5997,
+        2.0304
+      ],
+      "bbox": [
+        33.3433,
+        1.7177,
+        33.8949,
+        2.2526
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Otuke",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        33.3142,
+        2.4951
+      ],
+      "bbox": [
+        32.9824,
+        2.3479,
+        33.6501,
+        2.6395
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Moroto",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        33.2349,
+        2.275
+      ],
+      "bbox": [
+        32.9548,
+        2.039,
+        33.5385,
+        2.5202
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Erute",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.9478,
+        2.3293
+      ],
+      "bbox": [
+        32.7638,
+        2.0384,
+        33.1534,
+        2.6538
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kole",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.7557,
+        2.3056
+      ],
+      "bbox": [
+        32.566,
+        2.0972,
+        32.9119,
+        2.537
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Maruzi",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.4016,
+        1.9221
+      ],
+      "bbox": [
+        32.0783,
+        1.6136,
+        32.6432,
+        2.2377
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kwania",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.7284,
+        1.9795
+      ],
+      "bbox": [
+        32.5219,
+        1.6856,
+        32.9441,
+        2.1779
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Oyam",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.4867,
+        2.402
+      ],
+      "bbox": [
+        32.2151,
+        2.0981,
+        32.8089,
+        2.6472
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Omoro",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.4716,
+        2.6684
+      ],
+      "bbox": [
+        32.2477,
+        2.4666,
+        32.7333,
+        2.8543
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Aswa",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.3936,
+        3.0251
+      ],
+      "bbox": [
+        32.1754,
+        2.768,
+        32.6507,
+        3.2943
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Dokolo",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        33.0483,
+        2.0132
+      ],
+      "bbox": [
+        32.8463,
+        1.7099,
+        33.28,
+        2.1319
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kalaki",
+      "kind": "Municipality",
+      "region": "Eastern Region",
+      "centroid": [
+        33.3623,
+        1.9373
+      ],
+      "bbox": [
+        33.214,
+        1.6183,
+        33.4438,
+        2.0589
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kaberamaido",
+      "kind": "Municipality",
+      "region": "Eastern Region",
+      "centroid": [
+        33.0943,
+        1.7092
+      ],
+      "bbox": [
+        32.9415,
+        1.4671,
+        33.3055,
+        1.9153
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kasilo",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.2935,
+        1.5172
+      ],
+      "bbox": [
+        33.0138,
+        1.3404,
+        33.4518,
+        1.6968
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kioga",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.6594,
+        1.6935
+      ],
+      "bbox": [
+        32.3125,
+        1.4412,
+        32.9883,
+        1.8359
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Serere",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.5215,
+        1.4966
+      ],
+      "bbox": [
+        33.3766,
+        1.3172,
+        33.6988,
+        1.6892
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ngora",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.7725,
+        1.5457
+      ],
+      "bbox": [
+        33.5514,
+        1.3252,
+        33.8884,
+        1.6859
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kumi",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.9428,
+        1.5341
+      ],
+      "bbox": [
+        33.7268,
+        1.2698,
+        34.2295,
+        1.6595
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bukedea",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.155,
+        1.3802
+      ],
+      "bbox": [
+        33.914,
+        1.1744,
+        34.2712,
+        1.5695
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bulambuli",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.3413,
+        1.4404
+      ],
+      "bbox": [
+        34.2263,
+        1.1517,
+        34.5327,
+        1.5758
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Tingey",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.4258,
+        1.361
+      ],
+      "bbox": [
+        34.2996,
+        1.2082,
+        34.5308,
+        1.4844
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kween",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.5739,
+        1.5039
+      ],
+      "bbox": [
+        34.4041,
+        1.1825,
+        34.7372,
+        1.6092
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kongasis",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.7297,
+        1.355
+      ],
+      "bbox": [
+        34.5302,
+        1.1096,
+        34.8312,
+        1.4294
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Budadiri",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.3105,
+        1.1657
+      ],
+      "bbox": [
+        34.1695,
+        1.0956,
+        34.5127,
+        1.2859
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Manjiya",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.4118,
+        1.0542
+      ],
+      "bbox": [
+        34.2475,
+        0.9644,
+        34.5528,
+        1.1744
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bubulo",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.3165,
+        0.893
+      ],
+      "bbox": [
+        34.1636,
+        0.7546,
+        34.4752,
+        1.0153
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bungokho",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.1797,
+        1.0302
+      ],
+      "bbox": [
+        34.072,
+        0.8401,
+        34.3329,
+        1.1844
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Butebo",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.908,
+        1.1986
+      ],
+      "bbox": [
+        33.7257,
+        1.1032,
+        34.1262,
+        1.3074
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Budaka",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.9915,
+        1.0809
+      ],
+      "bbox": [
+        33.8423,
+        0.9381,
+        34.1188,
+        1.1911
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Pallisa",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.6697,
+        1.2377
+      ],
+      "bbox": [
+        33.3988,
+        1.0963,
+        33.8599,
+        1.3561
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kibuku",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.8105,
+        1.0873
+      ],
+      "bbox": [
+        33.6361,
+        0.9443,
+        33.9652,
+        1.1756
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bunyole",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.9282,
+        0.8626
+      ],
+      "bbox": [
+        33.749,
+        0.697,
+        34.1103,
+        1.0488
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Tororo",
+      "kind": "Municipality",
+      "region": "Eastern Region",
+      "centroid": [
+        34.1573,
+        0.7405
+      ],
+      "bbox": [
+        34.0328,
+        0.5822,
+        34.3117,
+        0.9095
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "West Budama",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.0082,
+        0.724
+      ],
+      "bbox": [
+        33.859,
+        0.5713,
+        34.1862,
+        0.8933
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Busiki",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.6686,
+        0.8509
+      ],
+      "bbox": [
+        33.5292,
+        0.687,
+        33.8357,
+        1.1007
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bulamogi",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.459,
+        1.0443
+      ],
+      "bbox": [
+        33.339,
+        0.8688,
+        33.6294,
+        1.2945
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kilak",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.1089,
+        3.1096
+      ],
+      "bbox": [
+        31.3417,
+        2.5568,
+        32.3716,
+        3.6042
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Nwoya",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        32.1147,
+        2.5253
+      ],
+      "bbox": [
+        31.3245,
+        2.2242,
+        32.3498,
+        2.8222
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "East Moyo",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.7548,
+        3.2418
+      ],
+      "bbox": [
+        31.3988,
+        2.8943,
+        32.0458,
+        3.6042
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "West Moyo",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.7363,
+        3.6459
+      ],
+      "bbox": [
+        31.515,
+        3.4767,
+        31.9623,
+        3.8325
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Obongi",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.5471,
+        3.4249
+      ],
+      "bbox": [
+        31.4092,
+        3.1687,
+        31.6568,
+        3.6155
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Aringa",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.2537,
+        3.4721
+      ],
+      "bbox": [
+        31.0323,
+        3.2467,
+        31.5352,
+        3.8225
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Koboko",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        30.9901,
+        3.5251
+      ],
+      "bbox": [
+        30.8676,
+        3.3414,
+        31.0895,
+        3.7569
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Maracha",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        30.9388,
+        3.2745
+      ],
+      "bbox": [
+        30.7921,
+        3.1459,
+        31.0653,
+        3.3906
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Terego",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.1695,
+        3.2241
+      ],
+      "bbox": [
+        30.9245,
+        3.0436,
+        31.4105,
+        3.3786
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ayivu",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        30.9252,
+        3.0707
+      ],
+      "bbox": [
+        30.7665,
+        2.989,
+        31.109,
+        3.1517
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Vurra",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        30.9763,
+        2.8635
+      ],
+      "bbox": [
+        30.7952,
+        2.6792,
+        31.1409,
+        3.0602
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Madi-Okollo",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.2317,
+        2.9052
+      ],
+      "bbox": [
+        30.9776,
+        2.5671,
+        31.5035,
+        3.2847
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Okoro",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        30.9058,
+        2.5509
+      ],
+      "bbox": [
+        30.7443,
+        2.3614,
+        31.0744,
+        2.7287
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Padyere",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.137,
+        2.4742
+      ],
+      "bbox": [
+        31.0032,
+        2.2283,
+        31.3025,
+        2.6944
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Jonam",
+      "kind": "District",
+      "region": "Northern Region",
+      "centroid": [
+        31.3653,
+        2.5319
+      ],
+      "bbox": [
+        31.2294,
+        2.1831,
+        31.5141,
+        2.7945
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Samia-Bugwe",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        34.01,
+        0.4318
+      ],
+      "bbox": [
+        33.871,
+        0.2265,
+        34.1475,
+        0.5877
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bugweri",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.591,
+        0.6377
+      ],
+      "bbox": [
+        33.5289,
+        0.4512,
+        33.668,
+        0.804
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kigulu",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.4636,
+        0.7336
+      ],
+      "bbox": [
+        33.3531,
+        0.5303,
+        33.5648,
+        0.9091
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Luuka",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.3325,
+        0.8055
+      ],
+      "bbox": [
+        33.2091,
+        0.5636,
+        33.4199,
+        1.0926
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Budiope",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.1217,
+        1.2463
+      ],
+      "bbox": [
+        32.805,
+        0.9885,
+        33.431,
+        1.4944
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bugabula",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.116,
+        0.9946
+      ],
+      "bbox": [
+        32.9185,
+        0.7734,
+        33.294,
+        1.2391
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buzaaya",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.1252,
+        0.777
+      ],
+      "bbox": [
+        32.9963,
+        0.6572,
+        33.2417,
+        0.8879
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bbaale",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.8437,
+        1.1296
+      ],
+      "bbox": [
+        32.6778,
+        0.7739,
+        32.9805,
+        1.49
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ntenjeru",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.9746,
+        0.7065
+      ],
+      "bbox": [
+        32.8154,
+        0.5111,
+        33.0788,
+        0.8966
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buruli",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.3184,
+        1.444
+      ],
+      "bbox": [
+        31.958,
+        0.9597,
+        32.7867,
+        1.6877
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kibanda",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        32.1896,
+        1.956
+      ],
+      "bbox": [
+        31.7455,
+        1.6344,
+        32.3501,
+        2.385
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buruuli",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        31.8088,
+        1.6788
+      ],
+      "bbox": [
+        31.6183,
+        1.3412,
+        32.0799,
+        2.0819
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bujenje",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        31.5699,
+        1.588
+      ],
+      "bbox": [
+        31.3524,
+        1.358,
+        31.7562,
+        1.7771
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buliisa",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        31.5367,
+        1.9556
+      ],
+      "bbox": [
+        31.3091,
+        1.6822,
+        31.7511,
+        2.3222
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bukooli",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.7805,
+        0.2968
+      ],
+      "bbox": [
+        33.6061,
+        -0.1641,
+        33.9567,
+        0.7351
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Nakaseke",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.1852,
+        1.0112
+      ],
+      "bbox": [
+        31.8111,
+        0.5491,
+        32.4839,
+        1.4913
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Katikamu",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.467,
+        0.8067
+      ],
+      "bbox": [
+        32.3211,
+        0.5502,
+        32.6143,
+        1.1477
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bamunanika",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.6368,
+        0.8206
+      ],
+      "bbox": [
+        32.5548,
+        0.5594,
+        32.7834,
+        1.1537
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kiboga",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.7197,
+        0.9924
+      ],
+      "bbox": [
+        31.284,
+        0.611,
+        32.1946,
+        1.3759
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bugahya",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        31.2853,
+        1.5179
+      ],
+      "bbox": [
+        30.9472,
+        1.2966,
+        31.5932,
+        1.8129
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buhaguzi",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        31.0265,
+        1.3018
+      ],
+      "bbox": [
+        30.6584,
+        1.0969,
+        31.4025,
+        1.5506
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bugangaizi",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        31.3279,
+        1.0057
+      ],
+      "bbox": [
+        31.0878,
+        0.708,
+        31.5186,
+        1.243
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buyaga",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.8152,
+        1.0267
+      ],
+      "bbox": [
+        30.5191,
+        0.8495,
+        31.1154,
+        1.183
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buyanja",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        31.0439,
+        0.8241
+      ],
+      "bbox": [
+        30.8265,
+        0.6405,
+        31.2957,
+        1.0345
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buwekula",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.3728,
+        0.5443
+      ],
+      "bbox": [
+        31.0071,
+        0.1764,
+        31.6726,
+        0.8803
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kassanda",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.7784,
+        0.5656
+      ],
+      "bbox": [
+        31.5601,
+        0.2397,
+        31.965,
+        0.8456
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Mityana",
+      "kind": "Municipality",
+      "region": "Central Region",
+      "centroid": [
+        32.0523,
+        0.5286
+      ],
+      "bbox": [
+        31.8934,
+        0.3252,
+        32.2588,
+        0.7106
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Busujju",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.05,
+        0.3086
+      ],
+      "bbox": [
+        31.8231,
+        0.227,
+        32.2605,
+        0.4004
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Mwenge",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.6385,
+        0.6553
+      ],
+      "bbox": [
+        30.3943,
+        0.3358,
+        30.9194,
+        0.9465
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kyaka",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.9927,
+        0.4651
+      ],
+      "bbox": [
+        30.7711,
+        0.2107,
+        31.2497,
+        0.7199
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kibale",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.5763,
+        0.357
+      ],
+      "bbox": [
+        30.3455,
+        0.108,
+        30.8574,
+        0.5836
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kitagwenda",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.3435,
+        0.0171
+      ],
+      "bbox": [
+        30.2014,
+        -0.1603,
+        30.4591,
+        0.2123
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Burahya",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.3529,
+        0.651
+      ],
+      "bbox": [
+        30.1426,
+        0.2044,
+        30.5424,
+        1.0635
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bunyangabu",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.1736,
+        0.5126
+      ],
+      "bbox": [
+        29.9933,
+        0.3542,
+        30.2964,
+        0.679
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bughendra",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.0588,
+        0.6724
+      ],
+      "bbox": [
+        29.9244,
+        0.4246,
+        30.2301,
+        0.9049
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ntoroko",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.3362,
+        1.0391
+      ],
+      "bbox": [
+        30.1514,
+        0.8601,
+        30.52,
+        1.2451
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ibanda",
+      "kind": "Municipality",
+      "region": "Western Region",
+      "centroid": [
+        30.4842,
+        -0.0688
+      ],
+      "bbox": [
+        30.2536,
+        -0.2753,
+        30.6864,
+        0.1682
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Busongora",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.0499,
+        0.1558
+      ],
+      "bbox": [
+        29.7115,
+        -0.1884,
+        30.299,
+        0.4563
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bukonjo",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        29.8441,
+        0.0922
+      ],
+      "bbox": [
+        29.7115,
+        -0.1782,
+        30.0055,
+        0.3739
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kazo",
+      "kind": "Municipality",
+      "region": "Western Region",
+      "centroid": [
+        30.8103,
+        0.0734
+      ],
+      "bbox": [
+        30.5893,
+        -0.1627,
+        31.042,
+        0.23
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Nyabushozi",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.8892,
+        -0.3235
+      ],
+      "bbox": [
+        30.6045,
+        -0.6995,
+        31.1485,
+        -0.0163
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Lwemiyaga",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.1663,
+        0.0695
+      ],
+      "bbox": [
+        31.0036,
+        -0.0845,
+        31.3134,
+        0.2456
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Mawogola",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.4108,
+        -0.0687
+      ],
+      "bbox": [
+        31.2596,
+        -0.3308,
+        31.5916,
+        0.2095
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kagoma",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.1465,
+        0.5954
+      ],
+      "bbox": [
+        33.0322,
+        0.4574,
+        33.2432,
+        0.6944
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Butembe",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.278,
+        0.5674
+      ],
+      "bbox": [
+        33.1842,
+        0.459,
+        33.3652,
+        0.6623
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bunya",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.4832,
+        0.3218
+      ],
+      "bbox": [
+        33.1659,
+        -0.028,
+        33.696,
+        0.6247
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bunyaruguru",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.0213,
+        -0.2372
+      ],
+      "bbox": [
+        29.6829,
+        -0.4257,
+        30.2325,
+        -0.059
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Buhweju",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.3177,
+        -0.2489
+      ],
+      "bbox": [
+        30.1912,
+        -0.4347,
+        30.5028,
+        -0.081
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Sheema",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.3018,
+        -0.6003
+      ],
+      "bbox": [
+        30.0812,
+        -0.7521,
+        30.4712,
+        -0.4176
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Igara",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.1429,
+        -0.4408
+      ],
+      "bbox": [
+        29.9321,
+        -0.6345,
+        30.3227,
+        -0.2241
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ruhinda",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.0316,
+        -0.5909
+      ],
+      "bbox": [
+        29.898,
+        -0.7497,
+        30.1583,
+        -0.3981
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kashari",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.5902,
+        -0.4575
+      ],
+      "bbox": [
+        30.4353,
+        -0.6179,
+        30.8121,
+        -0.2167
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Rwampara",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.4765,
+        -0.7262
+      ],
+      "bbox": [
+        30.2464,
+        -0.8286,
+        30.6468,
+        -0.5899
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bujumbura",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        29.8589,
+        -0.5963
+      ],
+      "bbox": [
+        29.6586,
+        -0.8634,
+        30.0273,
+        -0.318
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Rubabo",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        29.9761,
+        -0.8894
+      ],
+      "bbox": [
+        29.8314,
+        -1.0511,
+        30.0815,
+        -0.7244
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kinkiizi",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        29.7117,
+        -0.7844
+      ],
+      "bbox": [
+        29.5843,
+        -1.0688,
+        29.8993,
+        -0.4232
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bufumbira",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        29.6893,
+        -1.198
+      ],
+      "bbox": [
+        29.5684,
+        -1.3892,
+        29.8254,
+        -1.0003
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Rubanda",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        29.8809,
+        -1.1918
+      ],
+      "bbox": [
+        29.7324,
+        -1.4322,
+        30.0205,
+        -1.0131
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Rukiga",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.0594,
+        -1.1611
+      ],
+      "bbox": [
+        29.9305,
+        -1.2693,
+        30.302,
+        -1.0153
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ndorwa",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.0287,
+        -1.3342
+      ],
+      "bbox": [
+        29.9013,
+        -1.4732,
+        30.186,
+        -1.196
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Rushenyi",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.2229,
+        -1.0953
+      ],
+      "bbox": [
+        30.0719,
+        -1.1857,
+        30.3623,
+        -1.0282
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kajara",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.1469,
+        -0.9222
+      ],
+      "bbox": [
+        30.0305,
+        -1.0875,
+        30.27,
+        -0.7029
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Ruhaama",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.3935,
+        -0.8898
+      ],
+      "bbox": [
+        30.2193,
+        -1.0647,
+        30.5923,
+        -0.7418
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Isingiro",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.6852,
+        -0.8227
+      ],
+      "bbox": [
+        30.4717,
+        -1.0759,
+        30.8962,
+        -0.5962
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bukanga",
+      "kind": "District",
+      "region": "Western Region",
+      "centroid": [
+        30.9846,
+        -0.8076
+      ],
+      "bbox": [
+        30.7513,
+        -1.0046,
+        31.2689,
+        -0.6559
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kabula",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.1634,
+        -0.2499
+      ],
+      "bbox": [
+        31.0623,
+        -0.4747,
+        31.3034,
+        -0.0151
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kooki",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.3027,
+        -0.7077
+      ],
+      "bbox": [
+        31.0778,
+        -1.0001,
+        31.5244,
+        -0.4329
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kakuuto",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.5405,
+        -0.8606
+      ],
+      "bbox": [
+        31.2901,
+        -1.0001,
+        31.7952,
+        -0.7225
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kyotera",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.5916,
+        -0.6108
+      ],
+      "bbox": [
+        31.4071,
+        -0.8158,
+        31.7451,
+        -0.4283
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bukuto",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.6215,
+        -0.4105
+      ],
+      "bbox": [
+        31.1541,
+        -0.7118,
+        32.0485,
+        -0.177
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Bukomansimbi",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.6253,
+        -0.1359
+      ],
+      "bbox": [
+        31.5199,
+        -0.3171,
+        31.7229,
+        0.0579
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kalungu",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.7929,
+        -0.0923
+      ],
+      "bbox": [
+        31.6504,
+        -0.2694,
+        31.9494,
+        0.0868
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Gomba",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        31.7501,
+        0.2119
+      ],
+      "bbox": [
+        31.2929,
+        0.0388,
+        32.1626,
+        0.3709
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Butambala",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.0765,
+        0.1572
+      ],
+      "bbox": [
+        31.8161,
+        -0.0106,
+        32.3008,
+        0.3265
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Mawokota",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.1959,
+        0.1506
+      ],
+      "bbox": [
+        31.8647,
+        -0.1537,
+        32.426,
+        0.4064
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Busiro",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.4103,
+        0.2588
+      ],
+      "bbox": [
+        32.1727,
+        -0.1522,
+        32.6139,
+        0.5863
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kyadondo",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.5699,
+        0.4612
+      ],
+      "bbox": [
+        32.4261,
+        0.313,
+        32.6841,
+        0.5792
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kampala",
+      "kind": "City",
+      "region": "Central Region",
+      "centroid": [
+        32.5996,
+        0.3218
+      ],
+      "bbox": [
+        32.5206,
+        0.2193,
+        32.68,
+        0.4118
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Nakifuma",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.8284,
+        0.5979
+      ],
+      "bbox": [
+        32.6823,
+        0.3749,
+        32.9775,
+        0.8763
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Mukono",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.7597,
+        0.2697
+      ],
+      "bbox": [
+        32.6307,
+        0.0832,
+        32.9032,
+        0.5808
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Mukono",
+      "kind": "Municipality",
+      "region": "Central Region",
+      "centroid": [
+        32.732,
+        -0.0515
+      ],
+      "bbox": [
+        32.5846,
+        -0.1312,
+        32.8269,
+        0.0462
+      ],
+      "hasGeometry": true,
+      "assignedByNearestRegion": true
+    },
+    {
+      "name": "Buikwe",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        33.0039,
+        0.3239
+      ],
+      "bbox": [
+        32.8601,
+        0.0655,
+        33.2712,
+        0.5628
+      ],
+      "hasGeometry": true
+    },
+    {
+      "name": "Kyamuswa",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.446,
+        -0.386
+      ],
+      "bbox": [
+        32.2537,
+        -0.7421,
+        32.6178,
+        -0.1648
+      ],
+      "hasGeometry": true,
+      "assignedByNearestRegion": true
+    },
+    {
+      "name": "Bujjumba",
+      "kind": "District",
+      "region": "Central Region",
+      "centroid": [
+        32.2451,
+        -0.3713
+      ],
+      "bbox": [
+        32.0532,
+        -0.5452,
+        32.3597,
+        -0.2169
+      ],
+      "hasGeometry": true,
+      "assignedByNearestRegion": true
+    },
+    {
+      "name": "Buvuma",
+      "kind": "District",
+      "region": "Eastern Region",
+      "centroid": [
+        33.1969,
+        0.1339
+      ],
+      "bbox": [
+        32.8995,
+        -0.0639,
+        33.3994,
+        0.3144
+      ],
+      "hasGeometry": true,
+      "assignedByNearestRegion": true
+    }
+  ]
+}

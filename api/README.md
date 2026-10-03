@@ -149,6 +149,64 @@ Orders are not wired up yet: `POST /api/orders` still needs a `customerId`, and
 the checkout form is not yet creating a customer. A completed purchase empties
 the cart rather than converting it into an order.
 
+## Geography and payments
+
+### Endpoints
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/geo/hierarchy` | Whole tree, plus per-level counts and whether outlines exist |
+| `GET` | `/api/geo/boundaries/regions` | ADM1 polygons, geoBoundaries gbOpen |
+| `GET` | `/api/geo/boundaries/districts` | ADM2 polygons, geoBoundaries gbOpen |
+| `GET` | `/api/payments/methods` | Channels and providers available in Uganda |
+| `POST` | `/api/payments/intents` | Create an intent; the server prices it |
+| `GET` | `/api/payments/intents/:reference` | Poll status |
+| `PATCH` | `/api/payments/intents` | Report succeeded / failed / cancelled |
+
+### Boundary data is real only for two levels
+
+Regions and districts are seeded from geoBoundaries gbOpen, which is public
+domain and carries actual outlines for Uganda: ADM1 gives the 4 regions and
+ADM2 gives 151 districts. Those two files live in `api/data/geo/`.
+
+Sub-counties, parishes and villages are a different matter. geoBoundaries ADM3
+for Uganda returns 137 features named after districts, so it is not sub-county
+data, and no open dataset publishes parish or village boundaries. Villages have
+no geographic outline at all: they are addressed by name and landmark and
+overseen by the Local Council 1 chairperson.
+
+So `sub_counties`, `parishes` and `villages` exist in the schema, are ready to
+populate, and are served as empty lists with `geometryAvailable: false`. The
+boundary route returns 404 with an explanation for those levels rather than an
+empty FeatureCollection, because an empty collection draws as a broken map.
+Populate them from UBOS or OpenStreetMap `admin_level` boundaries and drop in a
+boundary file.
+
+```bash
+npm run db:seed:geo --prefix api    # re-seed regions and districts
+```
+
+### Payment channels
+
+`mobile_money` covers MTN (077, 078, 079), Airtel (070, 075) and UTel (071).
+`card` covers Visa and Mastercard. `wallet` covers anything on the Uganda
+interbank and mobile money interoperability switch.
+
+Mobile money is asynchronous: the customer approves a USSD prompt on the
+handset, so an intent sits in `awaiting_approval` until it is settled. The
+server detects the network from the number and refuses a mismatch, so a 070
+cannot be charged to MTN. Card numbers are Luhn-checked, checked against the
+claimed scheme, and only the last four digits are ever stored. The client
+never sends an amount; the server prices the cart, adds delivery, and returns
+the total.
+
+**This is not yet a live gateway.** There is no PSP wired in, so settling an
+intent is currently the customer confirming in the client. To go live, add the
+provider of your choice (Paystack and Flutterwave both support Uganda mobile
+money) behind `api/src/lib/payments.ts`, and replace the client-side settle with
+a webhook. Nothing else needs to move: the response shape the client already
+consumes is what a webhook would produce.
+
 ## Design notes
 
 **Order totals** are computed server-side in `api/src/app/api/orders/route.ts`:

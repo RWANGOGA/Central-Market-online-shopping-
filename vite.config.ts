@@ -39,5 +39,10 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    watch: {
+      // The api/ folder has its own dev server. Watching it makes Vite reload
+      // the page every time Next.js writes to .next.
+      ignored: ['**/api/.next/**', '**/api/node_modules/**', '**/api/data/**'],
+    },
   },
 })

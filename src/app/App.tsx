@@ -23,6 +23,7 @@ import AboutPage from './components/AboutPage';
 import ProfilePage from './components/ProfilePage';
 import AddToCartOverlay from './components/AddToCartOverlay';
 import Menu from './components/Menu';
+import MapPage from './components/MapPage';
 import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './lib/cartApi';
 
 // Enhanced product data with descriptions and locations
@@ -138,7 +139,7 @@ const PRODUCTS = [
 ];
 
 type SortOption = 'default' | 'a-z' | 'price';
-type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile';
+type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile' | 'map';
 
 interface CartItem {
   id: number;
@@ -473,9 +474,26 @@ export default function App() {
         return (
           <PaymentPage
             cartCount={cartCount}
+            cartId={cartIdRef.current}
+            customerName={customerInfo.fullName}
             onBack={handleBackFromPayment}
             onMenuClick={() => setIsNavOpen(true)}
             onProceedToConfirmation={handleProceedToConfirmation}
+          />
+        );
+
+      case 'map':
+        return (
+          <MapPage
+            cartCount={cartCount}
+            initialDistrict={customerInfo.district}
+            onBack={() => setViewMode('list')}
+            onMenuClick={() => setIsNavOpen(true)}
+            onCartClick={() => setViewMode('basket')}
+            onUseAsDeliveryPlace={(name) => {
+              setCustomerInfo((prev) => ({ ...prev, district: name }));
+              setViewMode('checkout');
+            }}
           />
         );
       
