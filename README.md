@@ -7,11 +7,29 @@ Originally exported from Figma as *Interactive Grocery Mobile App (Community)*.
 The original project is available at
 https://www.figma.com/design/S1StqUnUeGL37S13E8w1HT/Interactive-Grocery-Mobile-App--Community-.
 
-## Running the frontend
+## Running it
 
-Run `npm i` to install the dependencies.
+```bash
+npm i                    # frontend dependencies
+npm i --prefix api       # API dependencies
+npm run dev              # starts BOTH: the API on :3000 and the app on :5173
+```
 
-Run `npm run dev` to start the development server.
+`npm run dev` runs the two servers together, labels which is which, and stops
+both on Ctrl+C. Start them separately with `npm run dev:api` and
+`npm run dev:web` if you prefer.
+
+**Start both, not one.** The app loads without the API, but every `/api`
+request then fails, and Vite's proxy answers `500` because nothing is listening
+on the target port. A console full of 500s with no other symptom almost always
+means the API is not running.
+
+Before the first run, create the database and an admin account:
+
+```bash
+npm run db:push  --prefix api
+npm run db:seed  --prefix api
+```
 
 ## Coverage map
 
