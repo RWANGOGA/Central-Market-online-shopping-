@@ -54,6 +54,7 @@ export default function PaymentPage({
 
   const [stage, setStage] = useState<Stage>('details');
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
+  const [settlementToken, setSettlementToken] = useState<string>('');
   const [totals, setTotals] = useState<PaymentTotals | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -130,6 +131,9 @@ export default function PaymentPage({
     }
 
     setIntent(result.data.data);
+    // Kept for the approval step; the server issues it once and never returns
+    // it again.
+    setSettlementToken(result.data.data.settlementToken);
     setTotals(result.data.totals ?? null);
     setStage('approval');
   };
@@ -138,7 +142,7 @@ export default function PaymentPage({
     if (!intent || busy) return;
     setBusy(true);
 
-    const result = await settlePaymentIntent(intent.reference, 'succeeded');
+    const result = await settlePaymentIntent(intent.reference, settlementToken, 'succeeded');
 
     setBusy(false);
 
@@ -158,7 +162,7 @@ export default function PaymentPage({
   const cancelPayment = async () => {
     if (!intent || busy) return;
     setBusy(true);
-    await settlePaymentIntent(intent.reference, 'cancelled', 'Cancelled by the customer');
+    await settlePaymentIntent(intent.reference, settlementToken, 'cancelled', 'Cancelled by the customer');
     setBusy(false);
     setStage('details');
   };

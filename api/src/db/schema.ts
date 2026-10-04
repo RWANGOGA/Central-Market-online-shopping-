@@ -85,8 +85,12 @@ export const orders = sqliteTable('orders', {
   customerId: integer('customer_id')
     .notNull()
     .references(() => customers.id),
+  /**
+   * Fulfilment only. Money lives on payments.status, so a paid order that has
+   * not shipped is simply "processing" rather than a separate paid state.
+   */
   status: text('status', {
-    enum: ['pending', 'paid', 'fulfilled', 'cancelled'],
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
   })
     .notNull()
     .default('pending'),
@@ -106,6 +110,9 @@ export const orders = sqliteTable('orders', {
     village: string | null;
   }>(),
   createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at')
     .notNull()
     .default(sql`(datetime('now'))`),
 });
@@ -240,6 +247,15 @@ export const payments = sqliteTable('payments', {
   maskedCard: text('masked_card'),
   failureReason: text('failure_reason'),
   providerRef: text('provider_ref'),
+  /**
+   * SHA-256 of a one-time token handed to the client that created this intent.
+   *
+   * Mobile money approval is asynchronous, and until a real gateway exists the
+   * browser reports the outcome itself. Without this, anyone able to guess a
+   * reference could mark any payment succeeded. The hash is cleared once the
+   * intent settles, so the token cannot be replayed.
+   */
+  settlementTokenHash: text('settlement_token_hash'),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),

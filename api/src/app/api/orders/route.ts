@@ -28,7 +28,12 @@ class StockConflict extends Error {
 const createOrderSchema = z.object({
   cartId: z.number().int().positive(),
   customerId: z.number().int().positive(),
-  status: z.enum(['pending', 'paid']).default('paid'),
+  /**
+   * Accepted for the caller's intent only. The row is always created as
+   * "pending": orders.status is fulfilment state, and money is tracked on
+   * payments.status. Payment outcome must not set a fulfilment state.
+   */
+  paymentIntent: z.enum(['pending', 'paid']).default('paid'),
 });
 
 function makeReference() {
@@ -37,30 +42,11 @@ function makeReference() {
   return `GRC-${stamp}-${rand}`;
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const customerId = parsePositiveInt(url.searchParams.get('customerId'));
-  const reference = url.searchParams.get('reference');
-
-  if (customerId === null && !reference) {
-    return error('Provide "customerId" or "reference"', 400);
-  }
-
-  const base = db.select().from(orders).$dynamic();
-  const rows = await (
-    reference
-      ? base.where(eq(orders.reference, reference))
-      : base.where(eq(orders.customerId, customerId!))
-  ).orderBy(desc(orders.createdAt));
-
-  return json({ data: rows, meta: { total: rows.length } });
-}
-
 export async function POST(request: Request) {
   const parsed = createOrderSchema.safeParse(await request.json());
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);
 
-  const { cartId, customerId, status } = parsed.data;
+  const { cartId, customerId } = parsed.data;
 
   const cart = await loadCart(cartId);
   if (!cart) return error(`Cart ${cartId} not found`, 404);
@@ -128,7 +114,12 @@ export async function POST(request: Request) {
       .values({
         reference: makeReference(),
         customerId,
-        status,
+        status: 'pending' as const,
+        // Set explicitly rather than relying on the column default. The
+        // existing column was added by ALTER TABLE, where SQLite refuses a
+        // non-constant default like datetime('now'), so it holds '' until
+        // this writes it.
+        updatedAt: sql`datetime('now')`,
         subtotal,
         shipping,
         tax,

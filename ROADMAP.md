@@ -6,36 +6,72 @@ the later phases cannot be built correctly until earlier ones exist.
 
 ---
 
-## Phase 0 — Close a live authorisation hole
+## Phase 0 — Close a live authorisation hole — DONE
 
-**Do this first.** It is not a feature, and it is not hypothetical.
+**Status: implemented and verified.**
 
-`PATCH /api/orders/:id` performs **no authentication whatsoever**. Any caller
-who can reach the API can mark any order `fulfilled` or `cancelled`. Verified
-against a real order:
+This was not a feature. `PATCH /api/orders/:id` performed no authentication, so
+anyone who could reach the API could mark any order `fulfilled` or `cancelled`.
+It was confirmed against a real order before the fix, and returns 405 now.
 
-```
-$ curl -X PATCH .../api/orders/GRC-MUTOQQIA-3JQA -d '{"status":"fulfilled"}'
-200 {"data":{...,"status":"fulfilled",...}}
+An audit of every mutating route found three open endpoints, not one:
 
-$ curl -X PATCH .../api/orders/GRC-MUTOQQIA-3JQA -d '{"status":"cancelled"}'
-200 {"data":{...,"status":"cancelled",...}}
-```
-
-The route file imports nothing from `adminAuth`. This is the one endpoint
-where order state is mutable, so it is the one endpoint that matters.
-
-**Fix.** Move order mutation behind a session:
-
-| Method | Path | Auth |
+| Route | Problem | Now |
 | --- | --- | --- |
-| `PATCH` | `/api/admin/orders/:idOrRef` | session required |
+| `PATCH /api/orders/:id` | no auth; anyone could fulfil or cancel any order | removed; `PATCH /api/admin/orders/:id` requires a session |
+| `GET /api/orders` | returned every order with name, phone and full address | removed; `GET /api/admin/orders` requires a session |
+| `PATCH /api/inventory` | no auth; anyone could set stock to any value | removed; `PATCH /api/admin/inventory/products/:id` requires a session and a reason |
+| `PATCH /api/payments/intents` | no auth; anyone could mark a payment succeeded | requires a one-time settlement token |
 
-and reduce the public `PATCH /api/orders/:id` to read-only, or delete it. A
-customer-facing "cancel my order" route is a separate feature and should not
-reuse this path.
+### Payment settlement capability token
 
-**Also:** `GET /api/orders` currently lists all orders to anyone.
+Mobile money approval is asynchronous and, until a real gateway exists, the
+browser that opened the intent reports the outcome. That must not mean any
+browser can.
+
+`POST /api/payments/intents` now issues a one-time token, returns it once, and
+stores only its SHA-256 in `payments.settlement_token_hash`. Settling requires
+that token, compared in constant time, and clears the hash so it cannot be
+replayed. A reference on its own is no longer enough.
+
+### Order status is now fulfilment only
+
+The enum changed from `pending | paid | fulfilled | cancelled` to
+`pending | processing | shipped | delivered | cancelled`. Money lives on
+`payments.status`, so payment outcome no longer writes a fulfilment state, and
+a paid order that has not shipped is simply `processing`.
+
+Transitions are validated server-side against `api/src/lib/orderFlow.ts`,
+because the UI is not the only thing that can call the API:
+
+```
+pending    -> processing | cancelled
+processing -> shipped | cancelled
+shipped    -> delivered | cancelled
+delivered  -> (terminal)
+cancelled  -> (terminal)
+```
+
+An illegal move returns 409 and names the legal ones.
+
+### Added
+
+- `orders.updated_at`, needed by the status transitions
+- `payments.settlement_token_hash`
+
+### Verification
+
+44 assertions against a live server: the three removed routes answer 405, the
+attacked order is unchanged afterwards, settlement without a token returns 422
+and with a wrong one 403, the real token settles exactly once and cannot be
+replayed, staff routes work with a session and refuse without one, illegal
+transitions are rejected, stock adjustment demands a reason and refuses to go
+negative, and the reads the shop depends on stayed public.
+
+### Not done here
+
+`order_status_events` and the order queue UI are Phase 1. The admin order
+routes exist and are authorised, but nothing calls them yet.
 
 ---
 

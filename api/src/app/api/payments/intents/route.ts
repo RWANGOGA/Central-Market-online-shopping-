@@ -1,8 +1,10 @@
+import { timingSafeEqual } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { cartItems, carts, payments, products } from '@/db/schema';
 import { PAYMENT_METHODS, detectMobileMoneyProvider, maskCard, luhnValid, approvalInstructions, article } from '@/lib/payments';
+import { createSessionToken, hashToken } from '@/lib/password';
 import { error, json } from '@/lib/http';
 
 /**
@@ -120,6 +122,8 @@ export async function POST(request: Request) {
     providerRef = `wallet-${Math.random().toString(36).slice(2, 10)}`;
   }
 
+  const { token: settlementToken, tokenHash: settlementTokenHash } = createSessionToken();
+
   const [payment] = await db
     .insert(payments)
     .values({
@@ -135,6 +139,7 @@ export async function POST(request: Request) {
       walletId: walletId ?? null,
       maskedCard,
       providerRef,
+      settlementTokenHash,
     })
     .returning();
 
@@ -142,8 +147,9 @@ export async function POST(request: Request) {
     {
       data: {
         ...payment,
-        // Returned to the client so the UI can show the exact approval
-        // instructions for the network in play.
+        // Returned once, at creation, and never again. It is what lets the
+        // client that opened this intent report the outcome, and nobody else.
+        settlementToken,
         nextAction: { channel, provider, status, ...approvalInstructions(channel, provider) },
       },
       totals: { subtotal, delivery, total, currency: 'UGX' },
@@ -157,20 +163,42 @@ export async function POST(request: Request) {
  * a webhook from the gateway; the shape of this response is what the client
  * already consumes, so only the update logic changes.
  */
+/**
+ * Report the outcome of an intent.
+ *
+ * Mobile money approval is asynchronous and, until a real gateway is wired in,
+ * the browser that opened the intent is what reports the result. That must not
+ * mean any browser can: the caller has to present the settlement token issued
+ * when the intent was created. It is cleared on settlement, so a reference on
+ * its own is not enough.
+ */
 export async function PATCH(request: Request) {
   const parsed = z
     .object({
       reference: z.string().min(1),
       status: z.enum(['succeeded', 'failed', 'cancelled']),
+      settlementToken: z.string().min(1),
       failureReason: z.string().optional(),
     })
     .safeParse(await request.json());
 
   if (!parsed.success) return error('Invalid payload', 422);
-  const { reference, status, failureReason } = parsed.data;
+  const { reference, status, settlementToken, failureReason } = parsed.data;
 
   const payment = await db.query.payments.findFirst({ where: eq(payments.reference, reference) });
   if (!payment) return error(`Payment ${reference} not found`, 404);
+
+  // Compare in constant time and treat a missing hash the same as a mismatch,
+  // so an already-settled intent cannot be told apart from a wrong token.
+  const presented = Buffer.from(hashToken(settlementToken), 'hex');
+  const stored = payment.settlementTokenHash ? Buffer.from(payment.settlementTokenHash, 'hex') : Buffer.alloc(0);
+
+  if (presented.length !== stored.length || !timingSafeEqual(presented, stored)) {
+    return error(
+      'This browser did not open the payment. The settlement token is missing or does not match.',
+      403,
+    );
+  }
 
   if (payment.status === 'succeeded') {
     return error(`Payment ${reference} already succeeded`, 409);
@@ -178,7 +206,13 @@ export async function PATCH(request: Request) {
 
   const [updated] = await db
     .update(payments)
-    .set({ status, failureReason: failureReason ?? null, updatedAt: sql`datetime('now')` })
+    .set({
+      status,
+      failureReason: failureReason ?? null,
+      // Single use: settling spends the token.
+      settlementTokenHash: null,
+      updatedAt: sql`datetime('now')`,
+    })
     .where(eq(payments.id, payment.id))
     .returning();
 

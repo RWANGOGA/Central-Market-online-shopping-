@@ -165,7 +165,10 @@ the cart rather than converting it into an order.
 | `GET` | `/api/inventory` | Live stock per product, with unit and state |
 | `GET` | `/api/inventory?lowStock=true` | Only what is low or out |
 | `GET` | `/api/inventory?summary=true` | Counts by state, for a dashboard |
-| `PATCH` | `/api/inventory` | Adjust stock: `{ productId, delta, reason }` |
+| `GET` | `/api/admin/orders` | Order queue; `?status=`, `?limit=`, `?offset=` |
+| `GET` | `/api/admin/orders/:idOrRef` | One order with items and payments |
+| `PATCH` | `/api/admin/orders/:idOrRef` | Move fulfilment state; `{ status, note }` |
+| `PATCH` | `/api/admin/inventory/products/:id` | Adjust stock: `{ delta, reason }` |
 | `GET` | `/api/geo/hierarchy` | Whole tree, plus per-level counts and whether outlines exist |
 | `GET` | `/api/geo/locate?place=&region=` | Resolve a place name to coordinates |
 | `GET` | `/api/geo/validate?region=&district=` | Check a selection is internally consistent |
@@ -276,6 +279,39 @@ provider of your choice (Paystack and Flutterwave both support Uganda mobile
 money) behind `api/src/lib/payments.ts`, and replace the client-side settle with
 a webhook. Nothing else needs to move: the response shape the client already
 consumes is what a webhook would produce.
+
+## Authorisation
+
+Routes that change state need a staff session, with one deliberate exception.
+
+Public, because a shopper needs them: carts, customer upsert, creating an order,
+and `GET /api/products`, `GET /api/inventory`, which the shop reads.
+
+Staff only: everything under `/api/admin`, plus stock adjustment and order
+state changes.
+
+The exception is settling a payment. Mobile money approval is asynchronous and,
+until a real gateway is wired in, the browser that opened the intent reports
+the outcome. Rather than leave that open, `POST /api/payments/intents` issues a
+one-time token, returns it once, and stores only its SHA-256 in
+`payments.settlement_token_hash`. `PATCH /api/payments/intents` requires that
+token, compares it in constant time, and clears the hash on settlement so it
+cannot be replayed. A reference alone is not enough.
+
+Order status is fulfilment only:
+
+```
+pending    -> processing | cancelled
+processing -> shipped | cancelled
+shipped    -> delivered | cancelled
+delivered  -> (terminal)
+cancelled  -> (terminal)
+```
+
+Transitions are validated in `api/src/lib/orderFlow.ts` on the server, because
+the UI is not the only thing that can call the API. Money lives on
+`payments.status`, so a paid order that has not shipped is `processing` rather
+than a separate state.
 
 ## Staff accounts
 

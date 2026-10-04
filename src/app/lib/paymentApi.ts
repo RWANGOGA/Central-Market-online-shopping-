@@ -33,6 +33,11 @@ export type PaymentIntent = {
   walletId: string | null;
   maskedCard: string | null;
   failureReason: string | null;
+  /**
+   * Issued once, when the intent is created. Presenting it is what allows this
+   * browser to report the outcome, so it must be kept for the life of the flow.
+   */
+  settlementToken: string;
   nextAction: {
     channel: PaymentChannel;
     provider: string;
@@ -122,16 +127,21 @@ export async function fetchPaymentIntent(reference: string): Promise<Result<Paym
 }
 
 /**
- * Report the outcome back to the server. A production deployment replaces this
- * with a webhook from the gateway; until then the customer confirms here.
+ * Report the outcome back to the server.
+ *
+ * The settlement token from createPaymentIntent is required: it proves this
+ * browser opened the intent, so a reference on its own cannot be used to mark
+ * somebody else's payment succeeded. A production deployment replaces this with
+ * a gateway webhook and drops the token entirely.
  */
 export async function settlePaymentIntent(
   reference: string,
+  settlementToken: string,
   status: 'succeeded' | 'failed' | 'cancelled',
   failureReason?: string,
 ): Promise<Result<PaymentIntent>> {
   return request<PaymentIntent>('/payments/intents', {
     method: 'PATCH',
-    body: JSON.stringify({ reference, status, failureReason }),
+    body: JSON.stringify({ reference, settlementToken, status, failureReason }),
   });
 }
