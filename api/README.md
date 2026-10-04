@@ -165,7 +165,8 @@ the cart rather than converting it into an order.
 | `GET` | `/api/inventory` | Live stock per product, with unit and state |
 | `GET` | `/api/inventory?lowStock=true` | Only what is low or out |
 | `GET` | `/api/inventory?summary=true` | Counts by state, for a dashboard |
-| `GET` | `/api/admin/orders` | Order queue; `?status=`, `?limit=`, `?offset=` |
+| `GET` | `/api/admin/orders` | Order queue; `?q=`, `?status=`, `?region=`, `?from=`, `?to=`, `?limit=`, `?offset=` |
+| `GET` | `/api/admin/events` | Live order feed, text/event-stream |
 | `GET` | `/api/admin/orders/:idOrRef` | One order with items and payments |
 | `PATCH` | `/api/admin/orders/:idOrRef` | Move fulfilment state; `{ status, note }` |
 | `PATCH` | `/api/admin/inventory/products/:id` | Adjust stock: `{ delta, reason }` |
@@ -312,6 +313,24 @@ Transitions are validated in `api/src/lib/orderFlow.ts` on the server, because
 the UI is not the only thing that can call the API. Money lives on
 `payments.status`, so a paid order that has not shipped is `processing` rather
 than a separate state.
+
+Every accepted transition appends to `order_status_events` in the same
+transaction as the status change, so the timeline a customer sees cannot drift
+from the order's real state. `adminEmail` is stored rather than joined, so the
+trail survives an admin being removed.
+
+### Live order feed
+
+`GET /api/admin/events` streams Server-Sent Events. SSE rather than WebSockets
+because it is one-way, which is all a dashboard needs, it streams from an
+ordinary route handler, and it survives the Vite dev proxy. A comment
+heartbeat every 25 seconds keeps intermediaries from dropping an idle
+connection.
+
+The registry behind it is process-local, so it works for one API instance.
+A multi-instance or serverless deployment needs Redis or a database-backed
+stream; the client polls every 30 seconds regardless, so the failure mode is
+added latency rather than a broken screen.
 
 ## Staff accounts
 

@@ -13,7 +13,8 @@
     "db:reset": "rm -f local.db && npm run db:push && npm run db:seed:products && npm run db:seed:geo",
     "db:seed:geo": "tsx src/db/seed-geo.ts",
     "db:seed:products": "tsx src/db/seed.ts",
-    "db:seed:admin": "tsx src/db/seed-admin.ts"
+    "db:seed:admin": "tsx src/db/seed-admin.ts",
+    "db:backfill:orders": "tsx src/db/backfill-orders.ts"
   },
   "dependencies": {
     "@libsql/client": "0.18.0",

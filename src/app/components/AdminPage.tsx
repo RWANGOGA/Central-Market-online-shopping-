@@ -12,6 +12,7 @@ import {
   type ProductDraft,
 } from '../lib/adminApi';
 import AdminGate from './AdminGate';
+import OrderQueue from './OrderQueue';
 import StockBadge from './StockBadge';
 import { describeStockOf } from '../lib/stockApi';
 import { formatUgx } from '../lib/currency';
@@ -76,6 +77,7 @@ function CatalogueManager({
   onSignOut: () => Promise<void>;
   onClose?: () => void;
 }) {
+  const [tab, setTab] = useState<'catalogue' | 'orders'>('catalogue');
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,8 +189,32 @@ function CatalogueManager({
             </button>
           </div>
         </div>
+
+        <div className="mt-2 flex gap-1.5">
+          {(
+            [
+              ['catalogue', 'Catalogue'],
+              ['orders', 'Orders'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setTab(value)}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',_sans-serif] ${
+                tab === value
+                  ? 'bg-[#426b1f] text-white'
+                  : 'bg-neutral-100 text-[#000000]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {tab === 'orders' ? (
+        <OrderQueue />
+      ) : (
       <div className="p-4 space-y-3">
         {error && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700 font-['Inter:Regular',_sans-serif]">
@@ -300,6 +326,7 @@ function CatalogueManager({
             </div>
           ))}
       </div>
+      )}
     </div>
   );
 }

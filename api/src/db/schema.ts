@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
 
 export const products = sqliteTable('products', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -79,6 +79,58 @@ export const cartItems = sqliteTable('cart_items', {
     .default(sql`(datetime('now'))`),
 });
 
+/**
+ * Staff accounts. Separate from customers: an admin can change the catalogue
+ * and adjust stock, so the credential is stored apart and never returned by
+ * any endpoint.
+ *
+ * The first account is seeded from ADMIN_EMAIL and ADMIN_PASSWORD in the
+ * environment. No credential is committed to the repository.
+ */
+export const admins = sqliteTable('admins', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role', { enum: ['owner', 'manager'] }).notNull().default('manager'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  lastLoginAt: text('last_login_at'),
+});
+
+/**
+ * An opaque session. The token itself is never stored, only its SHA-256, so a
+ * database copy cannot be used to sign in.
+ */
+export const adminSessions = sqliteTable('admin_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  adminId: integer('admin_id')
+    .notNull()
+    .references(() => admins.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  userAgent: text('user_agent'),
+});
+
+/**
+ * Failed sign-in attempts, used to slow down password guessing. Kept in the
+ * database rather than in memory so a restart does not hand an attacker a fresh
+ * allowance.
+ */
+export const adminLoginAttempts = sqliteTable('admin_login_attempts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull(),
+  succeeded: integer('succeeded', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
 export const orders = sqliteTable('orders', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   reference: text('reference').notNull().unique(),
@@ -109,13 +161,59 @@ export const orders = sqliteTable('orders', {
     parish: string | null;
     village: string | null;
   }>(),
+  /**
+   * Copied from the customer at order time rather than read back through a join.
+   *
+   * "Orders by district" and "find the order for this phone number" are the two
+   * things staff do most, and both need an indexable column. The JSON
+   * shipping_address above stays as the record of what was actually typed.
+   */
+  customerName: text('customer_name'),
+  phone: text('phone'),
+  region: text('region'),
+  district: text('district'),
+
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
   updatedAt: text('updated_at')
     .notNull()
     .default(sql`(datetime('now'))`),
-});
+}, (table) => [
+  // Phase 4 reads these constantly. Without them every revenue-by-day query is
+  // a full table scan.
+  index('idx_orders_created').on(table.createdAt),
+  index('idx_orders_status').on(table.status),
+  index('idx_orders_customer').on(table.customerId),
+  index('idx_orders_region').on(table.region),
+  index('idx_orders_phone').on(table.phone),
+]);
+
+/**
+ * Every fulfilment transition, in one place.
+ *
+ * This is the order timeline a customer sees and the audit trail staff rely on,
+ * so it is written in the same transaction as the status change. `adminEmail`
+ * is stored rather than joined, so the trail survives an admin being removed.
+ */
+export const orderStatusEvents = sqliteTable('order_status_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  orderId: integer('order_id')
+    .notNull()
+    .references(() => orders.id, { onDelete: 'cascade' }),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status').notNull(),
+  note: text('note'),
+  changedByAdminId: integer('changed_by_admin_id').references(() => admins.id, {
+    onDelete: 'set null',
+  }),
+  changedByEmail: text('changed_by_email'),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+}, (table) => [
+  index('idx_order_events_order').on(table.orderId, table.createdAt),
+]);
 
 export const orderItems = sqliteTable('order_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -129,7 +227,10 @@ export const orderItems = sqliteTable('order_items', {
   priceValue: integer('price_value').notNull(),
   quantity: integer('quantity').notNull(),
   lineTotal: integer('line_total').notNull(),
-});
+}, (table) => [
+  index('idx_order_items_order').on(table.orderId),
+  index('idx_order_items_product').on(table.productId),
+]);
 
 /**
  * Uganda's administrative hierarchy.
@@ -264,58 +365,6 @@ export const payments = sqliteTable('payments', {
     .default(sql`(datetime('now'))`),
 });
 
-/**
- * Staff accounts. Separate from customers: an admin can change the catalogue
- * and adjust stock, so the credential is stored apart and never returned by
- * any endpoint.
- *
- * The first account is seeded from ADMIN_EMAIL and ADMIN_PASSWORD in the
- * environment. No credential is committed to the repository.
- */
-export const admins = sqliteTable('admins', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  email: text('email').notNull().unique(),
-  name: text('name').notNull(),
-  passwordHash: text('password_hash').notNull(),
-  role: text('role', { enum: ['owner', 'manager'] }).notNull().default('manager'),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  createdAt: text('created_at')
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  lastLoginAt: text('last_login_at'),
-});
-
-/**
- * An opaque session. The token itself is never stored, only its SHA-256, so a
- * database copy cannot be used to sign in.
- */
-export const adminSessions = sqliteTable('admin_sessions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  adminId: integer('admin_id')
-    .notNull()
-    .references(() => admins.id, { onDelete: 'cascade' }),
-  tokenHash: text('token_hash').notNull().unique(),
-  expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at')
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  userAgent: text('user_agent'),
-});
-
-/**
- * Failed sign-in attempts, used to slow down password guessing. Kept in the
- * database rather than in memory so a restart does not hand an attacker a fresh
- * allowance.
- */
-export const adminLoginAttempts = sqliteTable('admin_login_attempts', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  email: text('email').notNull(),
-  succeeded: integer('succeeded', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at')
-    .notNull()
-    .default(sql`(datetime('now'))`),
-});
-
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
@@ -324,6 +373,7 @@ export type Cart = typeof carts.$inferSelect;
 export type CartItem = typeof cartItems.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type OrderStatusEvent = typeof orderStatusEvents.$inferSelect;
 export type Region = typeof regions.$inferSelect;
 export type District = typeof districts.$inferSelect;
 export type SubCounty = typeof subCounties.$inferSelect;

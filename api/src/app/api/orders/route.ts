@@ -1,10 +1,11 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { carts, customers, orderItems, orders, products } from '@/db/schema';
+import { carts, customers, orderItems, orderStatusEvents, orders, products } from '@/db/schema';
 import { loadCart } from '@/lib/cart';
 import { error, json, parsePositiveInt } from '@/lib/http';
 import { checkLocation } from '@/lib/locationGuard';
+import { publishOrderEvent } from '@/lib/orderEvents';
 
 /**
  * All amounts are whole Ugandan shillings. The shilling has no minor unit in
@@ -124,6 +125,12 @@ export async function POST(request: Request) {
         shipping,
         tax,
         total,
+        // Copied rather than joined, so order search and the regional
+        // reporting in phase 4 have an indexable column to work from.
+        customerName: customer.fullName,
+        phone: customer.phone,
+        region: customer.region,
+        district: customer.district,
         shippingAddress: {
           fullName: customer.fullName,
           phone: customer.phone,
@@ -148,6 +155,16 @@ export async function POST(request: Request) {
       })),
     );
 
+    // The opening entry, so the timeline starts when the order does rather
+    // than at the first status change.
+    await tx.insert(orderStatusEvents).values({
+      orderId: order.id,
+      fromStatus: null,
+      toStatus: 'pending',
+      note: 'Order placed',
+      changedByEmail: 'customer',
+    });
+
     await tx
       .update(carts)
       .set({ status: 'converted', updatedAt: sql`datetime('now')` })
@@ -168,6 +185,22 @@ export async function POST(request: Request) {
     }
     throw err;
   }
+
+  // Push to any open staff dashboard. Fired after the transaction commits, so a
+  // subscriber never sees an order that then fails to save.
+  publishOrderEvent({
+    type: 'order.created',
+    id: created.id,
+    reference: created.reference,
+    from: null,
+    to: created.status,
+    total: created.total,
+    currency: created.currency,
+    region: created.region,
+    district: created.district,
+    customerName: created.customerName,
+    at: created.createdAt,
+  });
 
   return json({
     data: created,

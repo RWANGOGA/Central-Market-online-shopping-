@@ -68,14 +68,10 @@ replayed, staff routes work with a session and refuse without one, illegal
 transitions are rejected, stock adjustment demands a reason and refuses to go
 negative, and the reads the shop depends on stayed public.
 
-### Not done here
+## Phase 1 — Order Management — DONE
 
-`order_status_events` and the order queue UI are Phase 1. The admin order
-routes exist and are authorised, but nothing calls them yet.
-
----
-
-## Phase 1 — Order Management
+**Status: implemented and verified.** The order queue lives at
+**Staff > Orders**.
 
 ### Functional requirements
 
@@ -181,6 +177,42 @@ Poll every 10–15s as the fallback when the stream is unavailable.
 - Every transition writes an `order_status_events` row
 - A new order reaches an open dashboard without a refresh, within 2s
 - Cancelling an order returns its stock and leaves an auditable ledger entry
+
+### What was built
+
+- `order_status_events`, written in the same transaction as the status change,
+  so the timeline cannot drift from the order's actual state
+- `customer_name`, `phone`, `region` and `district` copied onto `orders` at
+  creation, with `db:backfill:orders` populating existing rows
+- Five indexes on `orders` and two on `order_items`
+- `GET /api/admin/orders` with search across reference, name and phone,
+  filters for status, region and date range, capped pagination, and the
+  distinct region list returned so the UI needs no second endpoint
+- `GET /api/admin/orders/:id` returning items, payments, timeline, and the
+  statuses staff may move to next
+- `GET /api/admin/events`, a Server-Sent Events feed with a 25s heartbeat
+- An order queue with live updates, search, filters, pagination, a detail view
+  with the timeline, and 30s polling underneath as a safety net
+
+### Verified
+
+47 assertions: the timeline records every transition in order and attributes
+each one, delivered is terminal, search finds by phone, name and reference,
+filters and date ranges behave, pagination is capped at 100, all admin routes
+refuse an unauthenticated caller including the event stream, and an order
+placed mid-test arrives on the SSE stream with its reference and customer name.
+Confirmed working through the Vite dev proxy, chunked rather than buffered.
+
+### Deliberately not done
+
+**Cancelling an order does not return stock.** Doing it by hand-editing
+`products.stock` would create a change with no explanation, which is exactly
+what phase 2 exists to prevent. The return belongs in the stock ledger, and
+will be written there with a `reference` pointing at the order.
+
+The live feed is process-local. It works for a single API instance and for
+`npm run dev`; a multi-instance or serverless deployment would need Redis or a
+database-backed stream, and the polling fallback covers that gap meanwhile.
 
 ---
 
