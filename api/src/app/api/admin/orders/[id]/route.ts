@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { orderItems, orderStatusEvents, orders, payments } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
+import { recordMovement } from '@/lib/stockLedger';
 import { ORDER_FLOW, allowedNext, canTransition, isOrderStatus } from '@/lib/orderFlow';
 import { error, json } from '@/lib/http';
 import { publishOrderEvent } from '@/lib/orderEvents';
@@ -91,14 +92,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
     );
   }
 
-  const changedAt = sql`datetime('now')`;
+  // Cancelling hands the goods back, so stock returns. It goes through the
+  // ledger with a reference to this order rather than being written to
+  // products.stock directly, which is what keeps SUM(delta) equal to the cached
+  // figure. Anything already delivered cannot be returned.
+  const returningStock = status === 'cancelled' && existing.status !== 'delivered';
 
-  // One transaction, so the status and the event that records it either both
-  // land or neither does.
   const [updated] = await db.transaction(async (tx) => {
     const [row] = await tx
       .update(orders)
-      .set({ status, updatedAt: changedAt })
+      .set({ status, updatedAt: sql`datetime('now')` })
       .where(eq(orders.id, existing.id))
       .returning();
 
@@ -110,6 +113,23 @@ export async function PATCH(request: Request, { params }: Ctx) {
       changedByAdminId: admin.id,
       changedByEmail: admin.email,
     });
+
+    if (returningStock) {
+      const lines = await tx.select().from(orderItems).where(eq(orderItems.orderId, row.id));
+      for (const line of lines) {
+        await recordMovement(
+          {
+            productId: line.productId,
+            delta: line.quantity,
+            reason: 'return',
+            reference: row.reference,
+            note: `Returned from cancelled order ${row.reference}`,
+            actorAdminId: admin.id,
+          },
+          tx,
+        );
+      }
+    }
 
     return [row];
   });
@@ -137,6 +157,15 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
   return json({
     data: { ...updated, timeline, nextStatuses: allowedNext(updated.status) },
-    meta: { changedBy: admin.email, previousStatus: existing.status, note: note ?? null },
+    meta: {
+      changedBy: admin.email,
+      previousStatus: existing.status,
+      note: note ?? null,
+      // Staff need to know the goods went back, not assume it.
+      stockReturned: returningStock,
+      stockReturnNote: returningStock
+        ? 'Each line was returned through the stock ledger, referencing this order.'
+        : null,
+    },
   });
 }

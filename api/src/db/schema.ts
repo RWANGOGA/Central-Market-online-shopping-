@@ -14,12 +14,29 @@ export const products = sqliteTable('products', {
   unit: text('unit').notNull(),
   imageFiles: text('image_files', { mode: 'json' }).notNull().$type<string[]>(),
   dietary: text('dietary', { mode: 'json' }).notNull().$type<string[]>(),
+  /**
+   * A cached total. The authoritative record is the sum of stock_movements,
+   * which is what makes stock reconcilable rather than merely a number.
+   */
   stock: integer('stock').notNull().default(0),
+  /**
+   * Per product, because a kilogram of ginger and a bulb of garlic are not
+   * comparable quantities and a single global threshold flags one and not the
+   * other. Null means fall back to LOW_STOCK_THRESHOLD.
+   */
+  lowStockThreshold: integer('low_stock_threshold'),
+  reorderQuantity: integer('reorder_quantity'),
+  supplierId: integer('supplier_id').references(() => suppliers.id, {
+    onDelete: 'set null',
+  }),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
-});
+}, (table) => [
+  // The low-stock list is a WHERE on this pair, run on every dashboard load.
+  index('idx_products_stock_alert').on(table.active, table.stock),
+]);
 
 /**
  * A delivery customer, keyed on the Ugandan mobile number rather than email.
@@ -233,6 +250,97 @@ export const orderItems = sqliteTable('order_items', {
 ]);
 
 /**
+ * Who supplies a product. Income is not modelled: this tracks what was
+ * ordered and received, not what was paid, and the price per unit lives on
+ * the purchase order line so a later supplier change does not rewrite history.
+ */
+export const suppliers = sqliteTable('suppliers', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  contactName: text('contact_name'),
+  phone: text('phone'),
+  district: text('district'),
+  region: text('region'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const purchaseOrders = sqliteTable('purchase_orders', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  reference: text('reference').notNull().unique(),
+  supplierId: integer('supplier_id')
+    .notNull()
+    .references(() => suppliers.id),
+  status: text('status', { enum: ['draft', 'sent', 'received', 'cancelled'] })
+    .notNull()
+    .default('draft'),
+  expectedAt: text('expected_at'),
+  receivedAt: text('received_at'),
+  note: text('note'),
+  createdByAdminId: integer('created_by_admin_id').references(() => admins.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const purchaseOrderItems = sqliteTable('purchase_order_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  purchaseOrderId: integer('purchase_order_id')
+    .notNull()
+    .references(() => purchaseOrders.id, { onDelete: 'cascade' }),
+  productId: integer('product_id')
+    .notNull()
+    .references(() => products.id),
+  quantity: integer('quantity').notNull(),
+  unit: text('unit').notNull(),
+  unitPrice: integer('unit_price').notNull(),
+  /** Set when the goods actually land, which may differ from what was ordered. */
+  receivedQuantity: integer('received_quantity'),
+}, (table) => [
+  index('idx_po_items_order').on(table.purchaseOrderId),
+  index('idx_po_items_product').on(table.productId),
+]);
+
+/**
+ * The stock ledger.
+ *
+ * Every change to products.stock writes a row here in the same transaction, so
+ * SUM(delta) per product always equals the cached stock column. That identity
+ * is what turns "27" into an explanation, and it is checkable at any moment
+ * with the reconciliation query on /api/admin/inventory/reconciliation.
+ */
+export const stockMovements = sqliteTable('stock_movements', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  productId: integer('product_id')
+    .notNull()
+    .references(() => products.id),
+  /** Signed. Negative leaves stock, positive brings it in. */
+  delta: integer('delta').notNull(),
+  reason: text('reason', {
+    enum: ['opening', 'sale', 'delivery', 'adjustment', 'waste', 'return', 'correction'],
+  }).notNull(),
+  /** Order reference or purchase order reference, so a movement is traceable. */
+  reference: text('reference'),
+  note: text('note'),
+  actorAdminId: integer('actor_admin_id').references(() => admins.id, {
+    onDelete: 'set null',
+  }),
+  actorLabel: text('actor_label'),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+}, (table) => [
+  index('idx_movements_product').on(table.productId, table.createdAt),
+  index('idx_movements_created').on(table.createdAt),
+  index('idx_movements_reason').on(table.reason),
+  index('idx_movements_reference').on(table.reference),
+]);
+
+/**
  * Uganda's administrative hierarchy.
  *
  * Regions and districts are seeded from geoBoundaries (gbOpen), which carries
@@ -374,6 +482,11 @@ export type CartItem = typeof cartItems.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type OrderStatusEvent = typeof orderStatusEvents.$inferSelect;
+export type StockMovement = typeof stockMovements.$inferSelect;
+export type NewStockMovement = typeof stockMovements.$inferInsert;
+export type Supplier = typeof suppliers.$inferSelect;
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
 export type Region = typeof regions.$inferSelect;
 export type District = typeof districts.$inferSelect;
 export type SubCounty = typeof subCounties.$inferSelect;

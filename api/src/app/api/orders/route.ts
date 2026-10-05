@@ -5,7 +5,9 @@ import { carts, customers, orderItems, orderStatusEvents, orders, products } fro
 import { loadCart } from '@/lib/cart';
 import { error, json, parsePositiveInt } from '@/lib/http';
 import { checkLocation } from '@/lib/locationGuard';
+import { recordMovement } from '@/lib/stockLedger';
 import { publishOrderEvent } from '@/lib/orderEvents';
+import { StockConflict } from '@/lib/stockErrors';
 
 /**
  * All amounts are whole Ugandan shillings. The shilling has no minor unit in
@@ -14,17 +16,6 @@ import { publishOrderEvent } from '@/lib/orderEvents';
 const SHIPPING_FLAT_RATE = 23720;
 const FREE_SHIPPING_THRESHOLD = 198000;
 const TAX_RATE = 0.0825;
-
-/** Thrown inside the transaction so a failed decrement rolls everything back. */
-class StockConflict extends Error {
-  constructor(
-    public productId: number,
-    public productName: string,
-  ) {
-    super(`${productName} sold out while the order was being placed`);
-    this.name = 'StockConflict';
-  }
-}
 
 const createOrderSchema = z.object({
   cartId: z.number().int().positive(),
@@ -85,27 +76,29 @@ export async function POST(request: Request) {
   const tax = Math.round(subtotal * TAX_RATE);
   const total = subtotal + shipping + tax;
 
+  const reference = makeReference();
+
   let created: typeof orders.$inferSelect;
   try {
     created = await db.transaction(async (tx) => {
-    // Draw down stock inside the transaction, and only after every check has
-    // passed. The update is conditional on stock still being sufficient, so two
-    // concurrent orders for the last kilo cannot both succeed.
+    // Draw down stock through the ledger, inside the transaction and only
+    // after every check has passed. recordMovement writes products.stock and
+    // its stock_movements row together, so a failure leaves neither behind and
+    // the ledger stays reconcilable.
     for (const item of cart.items) {
-      const result = await tx
-        .update(products)
-        .set({ stock: sql`${products.stock} - ${item.quantity}` })
-        .where(
-          and(
-            eq(products.id, item.productId),
-            sql`${products.stock} >= ${item.quantity}`,
-          ),
-        )
-        .returning({ id: products.id });
-
-      if (result.length === 0) {
-        // Throwing rolls the whole transaction back, so no partial decrement
-        // survives and no order is created.
+      try {
+        await recordMovement(
+          {
+            productId: item.productId,
+            delta: -item.quantity,
+            reason: 'sale',
+            reference: reference,
+            actorLabel: 'customer',
+          },
+          tx,
+        );
+      } catch (err) {
+        if (!(err instanceof StockConflict)) throw err;
         throw new StockConflict(item.productId, item.name);
       }
     }
@@ -113,7 +106,7 @@ export async function POST(request: Request) {
     const [order] = await tx
       .insert(orders)
       .values({
-        reference: makeReference(),
+        reference,
         customerId,
         status: 'pending' as const,
         // Set explicitly rather than relying on the column default. The

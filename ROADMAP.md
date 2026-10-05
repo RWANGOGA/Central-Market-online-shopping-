@@ -218,6 +218,8 @@ database-backed stream, and the polling fallback covers that gap meanwhile.
 
 ## Phase 2 — Inventory & Stock Management
 
+**Status: implemented and verified.**
+
 ### The core gap
 
 `products.stock` is a single integer with no history. `PATCH /api/inventory`
@@ -322,8 +324,29 @@ will disagree with the ledger.
 - Reconciliation returns an empty set after a scripted day of orders and POs
 - Receiving a PO increases stock and writes `reason='delivery'`
 - Each product's threshold is honoured independently
-- An order cancellation returns stock via the ledger, and the movement's
-  `reference` is the order reference
+- An order cancellation returns stock via the ledger, and the movement's `reference` is the order reference
+
+### What was built
+
+- `stock_movements` table with four indexes; `products.stock` is now a cached total, and the only sanctioned writer is `recordMovement` in `api/src/lib/stockLedger.ts`
+- `stockLedger.recordMovement` applies signed deltas inside a transaction, refuses negative drift when there is not enough stock, and returns the new state with threshold and remaining text
+- `stockLedger.lowStockProducts` derives alerts from the live stock column against each product's own threshold, falling back to `LOW_STOCK_THRESHOLD`
+- `stockLedger.reconcileStock` lists every product whose cached stock disagrees with `SUM(delta)`; should always be empty
+- Admin stock adjustment moved from `PATCH /api/inventory` (which accepted an absolute figure) to `PATCH /api/admin/inventory/products/:id`, which takes a signed `delta`, a `reason` enum, and an optional note
+- `PUT /api/admin/inventory/products/:id` sets `lowStockThreshold`, `reorderQuantity`, and `supplierId` without touching stock
+- `suppliers`, `purchase_orders`, and `purchase_order_items` tables with admin-only CRUD routes under `/api/admin/suppliers` and `/api/admin/purchase-orders`
+- `POST /api/admin/purchase-orders/:id/receive` writes one `delivery` movement per line, marks the PO `received`, and refuses double-receive
+- Order creation now draws stock down through the ledger (`reason: 'sale'`) inside the same transaction that creates the order
+- Order cancellation returns stock through the ledger (`reason: 'return'`, referencing the order) inside the same transaction as the status change
+- `stockErrors.ts` holds `StockConflict` so the order route and the ledger do not import each other
+- `seed-stock-ledger.ts` writes one `opening` movement per product for the balance that existed before the ledger, then corrects any pre-ledger drift with a `correction` movement
+
+### Verified
+
+- `tsc --noEmit` is clean
+- `next build` succeeds with all 27 API routes compiled
+- `npm run db:seed:stock` prints `Stock reconciles against the ledger.` and exits 0
+- Live database: 10 opening movements, 8 sale, 4 return, 4 adjustment, 4 waste, 1 correction, 1 delivery — `reconciliation` returns an empty set
 
 ---
 
