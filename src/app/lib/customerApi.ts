@@ -73,6 +73,28 @@ export interface CustomerOrdersResult {
   };
 }
 
+export interface CustomerPreferences {
+  customerId: number;
+  preferences: Record<string, unknown>;
+}
+
+export interface CustomerNotification {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface CustomerNotificationsResult {
+  data: CustomerNotification[];
+  meta: {
+    total: number;
+    unread: number;
+  };
+}
+
 function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
@@ -157,5 +179,27 @@ export async function createGuestCustomer(info: {
     method: 'POST',
     body: JSON.stringify(info),
   });
+  return data.data;
+}
+
+export async function fetchCustomerPreferences(): Promise<CustomerPreferences> {
+  const data = await request<{ data: CustomerPreferences }>('/customers/preferences');
+  return data.data;
+}
+
+export async function updateCustomerPreferences(preferences: Record<string, unknown>): Promise<CustomerPreferences> {
+  const data = await request<{ data: CustomerPreferences }>('/customers/preferences', {
+    method: 'PATCH',
+    body: JSON.stringify({ preferences }),
+  });
+  return data.data;
+}
+
+export async function fetchCustomerNotifications(params?: { unreadOnly?: boolean; limit?: number }): Promise<CustomerNotificationsResult> {
+  const searchParams = new URLSearchParams();
+  if (params?.unreadOnly) searchParams.set('unreadOnly', 'true');
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+  const qs = searchParams.toString();
+  const data = await request<{ data: CustomerNotificationsResult }>(`/customers/notifications${qs ? `?${qs}` : ''}`);
   return data.data;
 }

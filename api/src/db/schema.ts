@@ -222,6 +222,34 @@ export const adminActivityLog = sqliteTable('admin_activity_log', {
   index('idx_activity_entity').on(table.entity, table.entityId),
 ]);
 
+export const customerPreferences = sqliteTable('customer_preferences', {
+  customerId: integer('customer_id')
+    .notNull()
+    .references(() => customers.id, { onDelete: 'cascade' }),
+  preferences: text('preferences', { mode: 'json' }).notNull().default('{}'),
+  updatedAt: text('updated_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+}, (table) => [
+  index('idx_customer_preferences_customer').on(table.customerId),
+]);
+
+export const notifications = sqliteTable('notifications', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  customerId: integer('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
+  adminId: integer('admin_id').references(() => admins.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  read: integer('read', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+}, (table) => [
+  index('idx_notifications_customer').on(table.customerId, table.createdAt),
+  index('idx_notifications_admin').on(table.adminId, table.createdAt),
+]);
+
 export const orders = sqliteTable('orders', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   reference: text('reference').notNull().unique(),
@@ -577,3 +605,7 @@ export type AdminSession = typeof adminSessions.$inferSelect;
 export type AdminLoginAttempt = typeof adminLoginAttempts.$inferSelect;
 export type AdminActivityLog = typeof adminActivityLog.$inferSelect;
 export type NewAdminActivityLog = typeof adminActivityLog.$inferInsert;
+export type CustomerPreferences = typeof customerPreferences.$inferSelect;
+export type NewCustomerPreferences = typeof customerPreferences.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

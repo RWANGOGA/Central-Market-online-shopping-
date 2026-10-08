@@ -16,7 +16,8 @@
     "db:seed:admin": "tsx src/db/seed-admin.ts",
     "db:backfill:orders": "tsx src/db/backfill-orders.ts",
     "db:seed:stock": "tsx src/db/seed-stock-ledger.ts",
-    "db:seed:products:phase3": "tsx src/db/seed-products-phase3.ts"
+    "db:seed:products:phase3": "tsx src/db/seed-products-phase3.ts",
+    "db:seed:preferences": "tsx src/db/seed-preferences.ts"
   },
   "dependencies": {
     "@libsql/client": "0.18.0",

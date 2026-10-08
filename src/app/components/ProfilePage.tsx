@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { formatUgx } from "../lib/currency";
-import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, type CustomerProfile, type CustomerOrder } from '../lib/customerApi';
+import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, fetchCustomerPreferences, updateCustomerPreferences, fetchCustomerNotifications, type CustomerProfile, type CustomerOrder, type CustomerPreferences, type CustomerNotification } from '../lib/customerApi';
 
 interface ProfilePageProps {
   customerInfo: {
@@ -68,6 +68,11 @@ export default function ProfilePage({
   const [isEditing, setIsEditing] = useState(false);
   const [editedInfo, setEditedInfo] = useState(customerInfo);
   const [orderFilter, setOrderFilter] = useState<'all' | 'active' | 'delivered'>('all');
+  const [preferences, setPreferences] = useState<CustomerPreferences | null>(null);
+  const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -104,10 +109,31 @@ export default function ProfilePage({
     }
   }, []);
 
+  const loadPreferences = useCallback(async () => {
+    try {
+      const data = await fetchCustomerPreferences();
+      setPreferences(data);
+    } catch {
+      // Preferences are optional
+    }
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const data = await fetchCustomerNotifications({ limit: 20 });
+      setNotifications(data.data || []);
+      setUnreadCount(data.meta?.unread || 0);
+    } catch {
+      // Notifications are optional
+    }
+  }, []);
+
   useEffect(() => {
     loadProfile();
     loadOrders();
-  }, [loadProfile, loadOrders]);
+    loadPreferences();
+    loadNotifications();
+  }, [loadProfile, loadOrders, loadPreferences, loadNotifications]);
 
   useEffect(() => {
     if (activeTab === 'orders') {
@@ -149,24 +175,24 @@ export default function ProfilePage({
     return orders;
   }, [orders, orderFilter]);
 
-  const handleSave = async () => {
+  const handleSavePreferences = async () => {
+    setSavingPreferences(true);
     try {
-      const updated = await updateCustomerProfile({
-        fullName: editedInfo.fullName,
-        address: editedInfo.address,
-        region: editedInfo.region,
-        district: editedInfo.district,
-        subCounty: editedInfo.subCounty,
-        parish: editedInfo.parish,
-        village: editedInfo.village,
+      const prefs = preferences?.preferences || {};
+      await updateCustomerPreferences({
+        highlightVegan: (document.querySelector('[data-pref="highlightVegan"]') as HTMLInputElement)?.checked ?? false,
+        farmNotifications: (document.querySelector('[data-pref="farmNotifications"]') as HTMLInputElement)?.checked ?? false,
+        reusablePackaging: (document.querySelector('[data-pref="reusablePackaging"]') as HTMLInputElement)?.checked ?? false,
+        orderUpdates: (document.querySelector('[data-pref="orderUpdates"]') as HTMLInputElement)?.checked ?? false,
+        promotions: (document.querySelector('[data-pref="promotions"]') as HTMLInputElement)?.checked ?? false,
       });
-      setProfile(updated);
-      onUpdateCustomerInfo(editedInfo);
-      setIsEditing(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save changes');
+      await loadPreferences();
+    } catch {
+      setError('Could not save preferences');
+    } finally {
+      setSavingPreferences(false);
     }
   };
 
@@ -221,6 +247,68 @@ export default function ProfilePage({
               </div>
             )}
           </button>
+
+          {/* Notifications Bell */}
+          <button
+            onClick={() => setShowNotifications((v) => !v)}
+            aria-label="Notifications"
+            className="absolute right-14 rounded-2xl size-8 top-[18px] cursor-pointer flex items-center justify-center"
+          >
+            <div className="size-5">
+              <svg className="block size-full" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </div>
+            {unreadCount > 0 && (
+              <div className="absolute bg-red-500 left-[17px] rounded-full size-4 top-[-1px]">
+                <div className="flex flex-col items-center justify-center relative size-full">
+                  <div className="box-border content-stretch flex flex-col gap-2 items-center justify-center px-0.5 py-px relative size-4">
+                    <div className="flex flex-col font-['Inter:Medium',_sans-serif] font-medium justify-center leading-[0] not-italic relative shrink-0 text-[#ffffff] text-[10px] text-center text-nowrap tracking-[-0.1px]">
+                      <p className="adjustLetterSpacing block leading-none whitespace-pre text-[9px]">{unreadCount > 9 ? '9+' : unreadCount}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </button>
+
+          {/* Notifications Dropdown */}
+          {showNotifications && (
+            <div className="absolute right-0 top-[52px] w-[320px] bg-white border border-neutral-200 rounded-xl shadow-lg z-50 max-h-[400px] overflow-y-auto">
+              <div className="p-3 border-b border-neutral-100 flex items-center justify-between">
+                <h3 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">Notifications</h3>
+                <button
+                  onClick={() => setShowNotifications(false)}
+                  className="text-[#757575] hover:text-[#000000] text-[12px]"
+                >
+                  Close
+                </button>
+              </div>
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-[#757575] text-[13px]">No notifications yet</div>
+              ) : (
+                <div className="divide-y divide-neutral-100">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`p-3 ${notification.read ? 'bg-white' : 'bg-[#426b1f]/5'}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${notification.read ? 'bg-transparent' : 'bg-[#426b1f]'}`} />
+                        <div className="grow min-w-0">
+                          <p className="text-[13px] font-medium text-[#000000] truncate">{notification.title}</p>
+                          <p className="text-[12px] text-[#757575] line-clamp-2">{notification.message}</p>
+                          <p className="text-[11px] text-[#9a9a9a] mt-1">
+                            {new Date(notification.createdAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Menu Hamburger */}
           <button
@@ -564,22 +652,64 @@ export default function ProfilePage({
 
           {/* Tab: Preferences */}
           {activeTab === 'preferences' && (
-            <div className="border border-neutral-200 rounded-xl p-4 bg-white space-y-3 font-['Inter:Regular',_sans-serif] text-[14px]">
-              <h4 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">
-                Dietary & Delivery Notes
-              </h4>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="accent-[#426b1f] w-4 h-4 rounded" />
+            <div className="border border-neutral-200 rounded-xl p-4 bg-white space-y-4 font-['Inter:Regular',_sans-serif] text-[14px]">
+              <div className="flex items-center justify-between">
+                <h4 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">
+                  Notification & Delivery Preferences
+                </h4>
+                <button
+                  onClick={handleSavePreferences}
+                  disabled={savingPreferences}
+                  className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#426b1f] hover:underline disabled:opacity-50"
+                >
+                  {savingPreferences ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+              <div className="space-y-3">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[13px] text-[#000000]">Order status updates</span>
+                  <input
+                    type="checkbox"
+                    data-pref="orderUpdates"
+                    defaultChecked={preferences?.preferences?.orderUpdates ?? true}
+                    className="accent-[#426b1f] w-4 h-4 rounded"
+                  />
+                </label>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[13px] text-[#000000]">Farm harvest notifications</span>
+                  <input
+                    type="checkbox"
+                    data-pref="farmNotifications"
+                    defaultChecked={preferences?.preferences?.farmNotifications ?? false}
+                    className="accent-[#426b1f] w-4 h-4 rounded"
+                  />
+                </label>
+                <label className="flex items-center justify-between cursor-pointer">
                   <span className="text-[13px] text-[#000000]">Highlight Certified Vegan (VG) produce</span>
+                  <input
+                    type="checkbox"
+                    data-pref="highlightVegan"
+                    defaultChecked={preferences?.preferences?.highlightVegan ?? false}
+                    className="accent-[#426b1f] w-4 h-4 rounded"
+                  />
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="accent-[#426b1f] w-4 h-4 rounded" />
-                  <span className="text-[13px] text-[#000000]">Notify when Bukalasi Farm garlic harvests</span>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[13px] text-[#000000]">Reusable bags and crates preferred</span>
+                  <input
+                    type="checkbox"
+                    data-pref="reusablePackaging"
+                    defaultChecked={preferences?.preferences?.reusablePackaging ?? false}
+                    className="accent-[#426b1f] w-4 h-4 rounded"
+                  />
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="accent-[#426b1f] w-4 h-4 rounded" />
-                  <span className="text-[13px] text-[#000000]">Reuseable bags and crates preferred</span>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[13px] text-[#000000]">Promotions and offers</span>
+                  <input
+                    type="checkbox"
+                    data-pref="promotions"
+                    defaultChecked={preferences?.preferences?.promotions ?? false}
+                    className="accent-[#426b1f] w-4 h-4 rounded"
+                  />
                 </label>
               </div>
             </div>
