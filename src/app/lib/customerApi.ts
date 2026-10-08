@@ -137,3 +137,25 @@ export async function signupCustomer(data: {
 export async function logoutCustomer(): Promise<void> {
   await request('/customers/session', { method: 'POST' });
 }
+
+export async function createOrder(cartId: number, customerId: number): Promise<{ reference: string }> {
+  const data = await request<{ data: { reference: string } }>('/orders', {
+    method: 'POST',
+    body: JSON.stringify({ cartId, customerId }),
+  });
+  return data.data;
+}
+
+export async function createGuestCustomer(info: {
+  fullName: string;
+  phone: string;
+  region: string;
+  district?: string;
+  address: string;
+}): Promise<{ id: number }> {
+  const data = await request<{ data: { id: number } }>('/customers', {
+    method: 'POST',
+    body: JSON.stringify(info),
+  });
+  return data.data;
+}

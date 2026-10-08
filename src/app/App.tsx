@@ -30,7 +30,7 @@ import AdminPage from './components/AdminPage';
 import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './lib/cartApi';
 import { fetchStock, applyStockDelta, type StockLevel } from './lib/stockApi';
 import { useCatalogue, type CatalogueProduct } from './lib/catalogue';
-import { fetchCustomerProfile } from './lib/customerApi';
+import { fetchCustomerProfile, createOrder } from './lib/customerApi';
 
 // Enhanced product data with descriptions and locations
 /**
@@ -476,7 +476,36 @@ export default function App() {
     setViewMode('payment');
   };
 
-  const handleCompletePurchase = () => {
+  const handleCompletePurchase = async () => {
+    const serverCartId = cartIdRef.current;
+    if (serverCartId && cartItems.length > 0) {
+      let customerId = customerSession?.id;
+
+      if (!customerId) {
+        try {
+          const guest = await createGuestCustomer({
+            fullName: customerInfo.fullName.trim() || 'Guest',
+            phone: customerInfo.phone.trim(),
+            region: customerInfo.region || 'Central Region',
+            district: customerInfo.district || undefined,
+            address: customerInfo.address.trim() || 'Not specified',
+          });
+          customerId = guest.id;
+        } catch {
+          // Proceed without linking to a customer record if guest creation fails
+          customerId = undefined;
+        }
+      }
+
+      if (customerId) {
+        try {
+          await createOrder(serverCartId, customerId);
+        } catch {
+          // Don't block the confirmation screen if the order write fails
+        }
+      }
+    }
+
     // Show order confirmation and clear cart
     setViewMode('orderConfirmation');
 
@@ -494,7 +523,6 @@ export default function App() {
 
     // Empty the server cart and start a fresh one, so a reload after
     // checkout does not resurrect the basket that was just paid for.
-    const serverCartId = cartIdRef.current;
     if (serverCartId) {
       resetCart(serverCartId).then((id) => {
         cartIdRef.current = id;
