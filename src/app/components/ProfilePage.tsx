@@ -93,7 +93,7 @@ export default function ProfilePage({
     setOrdersLoading(true);
     try {
       const data = await fetchCustomerOrders({ limit: 50 });
-      setOrders(data.data);
+      setOrders(data);
     } catch {
       // Orders are optional; don't block the rest of the profile
     } finally {
@@ -119,8 +119,8 @@ export default function ProfilePage({
 
   const memberSince = profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('en-UG', { month: 'long', year: 'numeric' }) : '2024';
 
-  const totalSpent = orders.reduce((sum, order) => sum + order.total, 0);
-  const activeOrders = orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
+  const totalSpent = (orders ?? []).reduce((sum, order) => sum + (order.total || 0), 0);
+  const activeOrders = (orders ?? []).filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
 
   const handleSave = async () => {
     try {
