@@ -7,6 +7,7 @@ import { recordMovement } from '@/lib/stockLedger';
 import { ORDER_FLOW, allowedNext, canTransition, isOrderStatus } from '@/lib/orderFlow';
 import { error, json } from '@/lib/http';
 import { publishOrderEvent } from '@/lib/orderEvents';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * Staff order detail and fulfilment.
@@ -132,6 +133,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
     }
 
     return [row];
+  });
+
+  await recordActivity({
+    action: 'order.status',
+    entity: 'order',
+    entityId: updated.reference,
+    before: { status: existing.status },
+    after: { status: updated.status },
+    adminId: admin.id,
+    adminEmail: admin.email,
   });
 
   const timeline = await db

@@ -4,6 +4,7 @@ import { purchaseOrderItems, purchaseOrders } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { recordMovement } from '@/lib/stockLedger';
 import { error, json } from '@/lib/http';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * Receive a purchase order.
@@ -78,6 +79,16 @@ export async function POST(request: Request, { params }: Ctx) {
       .where(eq(purchaseOrders.id, order.id));
 
     return applied;
+  });
+
+  await recordActivity({
+    action: 'purchase_order.receive',
+    entity: 'purchase_order',
+    entityId: order.reference,
+    before: { status: 'sent' },
+    after: { status: 'received', units: received.reduce((sum, movement) => sum + movement.delta, 0) },
+    adminId: admin.id,
+    adminEmail: admin.email,
   });
 
   return json({

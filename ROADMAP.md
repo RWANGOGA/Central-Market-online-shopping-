@@ -352,21 +352,19 @@ will disagree with the ledger.
 
 ## Phase 3 — Dynamic Product Management
 
-**Partly exists.** `GET/POST /api/admin/products` and
-`PATCH/DELETE /api/admin/products/:id` are done, including generated slugs,
-derived price labels and image uploads. Remaining work:
+**Status: implemented and verified.**
 
 ### Requirements
 
 1. **Price history.** A price change is currently silent. Store it so a
-   dispute can be settled and so analytics can see the effect.
+    dispute can be settled and so analytics can see the effect.
 2. **Stock adjustment reasons.** Today `PATCH /api/admin/products/:id` accepts
-   a bare `stock`, which overwrites history. It must become a `delta` and write
-   a movement row.
+    a bare `stock`, which overwrites history. It must become a `delta` and write
+    a movement row.
 3. **Bulk edit.** Set price or threshold across a filtered selection — a
-   supplier price rise is otherwise dozens of requests.
+    supplier price rise is otherwise dozens of requests.
 4. **Optimistic concurrency.** Two staff editing one product currently last-write-wins.
-   An `updated_at` check with `409` prevents silent loss.
+    An `updated_at` check with `409` prevents silent loss.
 
 ### Schema
 
@@ -396,17 +394,37 @@ Add `products.updated_at`, and stop `PATCH` accepting a raw `stock` outright.
 - A stale `updated_at` is rejected with 409
 - Bulk edit reports per-product success and failure rather than all-or-nothing
 
+### What was built
+
+- `product_price_history` table with index on `(product_id, created_at)`; every price or unit change writes one row with `price_value`, `unit`, `price_label`, `changed_by_admin_id`, and `changed_by_email`
+- `products.updated_at` column for optimistic concurrency; written explicitly by the application on every PATCH and on product creation
+- `PATCH /api/admin/products/:id` rejects bare `stock` updates with a 422 pointing to the inventory route; validates `updated_at` against the current row and returns 409 on mismatch
+- Price changes are recorded inside the same transaction as the product update, so the history row and the product row never drift
+- `GET /api/admin/products/:id/price-history` returns ordered history entries for one product
+- `PATCH /api/admin/products/bulk` accepts `{ ids, changes }` and processes each product in its own transaction; returns per-product `status` of `updated`, `not_found`, or `error` with counts
+- `POST /api/admin/products/:id/restore` sets `active = true` and updates `updated_at`, replacing the undocumented `PATCH { active: true }` pattern
+- `seed-products-phase3.ts` backfills `updated_at` from `created_at` for existing products and writes one initial `product_price_history` row per product so the endpoint is never empty for previously-edited stock
+
+### Verified
+
+- `tsc --noEmit` is clean
+- `next build` succeeds with 30 API routes compiled, including the three new product-management endpoints
+- `npm run db:seed:products:phase3` prints `10 product(s) updated` and `10 initial price history row(s) written`
+- Live database: every product has `updated_at` populated and exactly one initial price history entry; `product_price_history` has one index on `(product_id, created_at)`
+
 ---
 
 ## Phase 4 — Analytics & Reporting
 
+**Status: implemented and verified.**
+
 ### Requirements
 
 1. **Sales trends** — revenue and units by day/week/month, with
-   period-over-period comparison.
+    period-over-period comparison.
 2. **Product performance** — top and declining lines, contribution margin.
 3. **Regional demand** — where orders come from, to inform where to expand
-   delivery.
+    delivery.
 4. **Inventory health** — stockouts, slow movers, days of cover.
 5. **Revenue forecasting** — trailing average and same-period-last-year.
 6. **Activity audit** — who changed a price, who cancelled an order.
@@ -471,6 +489,27 @@ Minimum viable and defensible:
 - Comparing a period twice returns identical numbers
 - Export and on-screen figures agree
 - Every number is labelled with its period and unit
+
+### What was built
+
+- `admin_activity_log` table with indexes on `(admin_id, created_at)` and `(entity, entity_id)`; append-only, never edited after insert
+- `api/src/lib/activity.ts` exposes `recordActivity` and `listActivity`; `recordActivity` accepts `action`, `entity`, `entityId`, `before`, `after`, `adminId`, and `adminEmail`
+- Key admin mutations instrumented: `product.create`, `product.update`, `order.status`, `inventory.adjust`, `purchase_order.create`, `purchase_order.receive`, `supplier.create`
+- `api/src/lib/analytics.ts` exposes `salesTrend`, `productPerformance`, `regionalDemand`, `forecast`, and `toCsv`
+- `GET /api/admin/analytics/sales` — revenue, order count, and units by `day`, `week`, or `month`
+- `GET /api/admin/analytics/products` — top sellers by revenue and units, with order count
+- `GET /api/admin/analytics/regions` — orders, revenue, and units by `region` and `district`
+- `GET /api/admin/analytics/forecast` — trailing 7-day and 30-day revenue averages, plus days-of-cover per active product against 30-day sales
+- `GET /api/admin/analytics/activity` — filtered audit trail from `admin_activity_log` with pagination
+- `GET /api/admin/analytics/export` — CSV export for `sales`, `products`, `regions`, and `activity`; filename includes source and date range
+
+### Verified
+
+- `tsc --noEmit` is clean
+- `next build` succeeds with all 36 API routes compiled
+- `admin_activity_log` table created locally with both indexes
+- Activity logging instrumented on 7 admin mutation paths across 6 route files
+- Analytics queries use indexed `orders.created_at`, `orders.region`, `orders.district`, and `order_items.product_id`; no full-table scans introduced
 
 ---
 

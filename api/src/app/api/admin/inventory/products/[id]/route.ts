@@ -7,6 +7,7 @@ import { LOW_STOCK_THRESHOLD } from '@/lib/stock';
 import { StockConflict } from '@/lib/stockErrors';
 import { recordMovement } from '@/lib/stockLedger';
 import { error, json } from '@/lib/http';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * Staff-only stock adjustment.
@@ -63,6 +64,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
       reason,
       note: note ?? null,
       actorAdminId: admin.id,
+    });
+
+    await recordActivity({
+      action: 'inventory.adjust',
+      entity: 'inventory',
+      entityId: product.id,
+      before: { stock: result.previous, delta, reason },
+      after: { stock: result.stock, delta, reason },
+      adminId: admin.id,
+      adminEmail: admin.email,
     });
 
     return json({
@@ -126,6 +137,24 @@ export async function PUT(request: Request, { params }: Ctx) {
     .set(set)
     .where(eq(products.id, product.id))
     .returning();
+
+  await recordActivity({
+    action: 'product.update',
+    entity: 'product',
+    entityId: updated.id,
+    before: {
+      lowStockThreshold: product.lowStockThreshold,
+      reorderQuantity: product.reorderQuantity,
+      supplierId: product.supplierId,
+    },
+    after: {
+      lowStockThreshold: updated.lowStockThreshold,
+      reorderQuantity: updated.reorderQuantity,
+      supplierId: updated.supplierId,
+    },
+    adminId: admin.id,
+    adminEmail: admin.email,
+  });
 
   return json({
     data: {

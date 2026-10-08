@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { products, suppliers } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { error, json } from '@/lib/http';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * Suppliers.
@@ -64,6 +65,15 @@ export async function POST(request: Request) {
       region: parsed.data.region?.trim() || null,
     })
     .returning();
+
+  await recordActivity({
+    action: 'supplier.create',
+    entity: 'supplier',
+    entityId: created.id,
+    after: { name: created.name, region: created.region, district: created.district },
+    adminId: admin.id,
+    adminEmail: admin.email,
+  });
 
   return json({ data: created, meta: { createdBy: admin.email } }, { status: 201 });
 }

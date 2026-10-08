@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { purchaseOrderItems, purchaseOrders, suppliers } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { error, json, parsePositiveInt } from '@/lib/http';
+import { recordActivity } from '@/lib/activity';
 
 function makeReference() {
   return `PO-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
@@ -105,6 +106,15 @@ export async function POST(request: Request) {
     );
 
     return order;
+  });
+
+  await recordActivity({
+    action: 'purchase_order.create',
+    entity: 'purchase_order',
+    entityId: created.reference,
+    after: { supplierId: supplier.id, status: 'sent', items: lines.length },
+    adminId: admin.id,
+    adminEmail: admin.email,
   });
 
   return json({ data: created, meta: { createdBy: admin.email, supplier: supplier.name } }, { status: 201 });

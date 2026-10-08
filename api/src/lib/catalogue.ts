@@ -27,6 +27,18 @@ export const productInputSchema = z.object({
 
 export const productUpdateSchema = productInputSchema.partial().extend({
   active: z.boolean().optional(),
+  /**
+   * The `updated_at` value the client last saw. A mismatch means someone else
+   * saved in between, and the PATCH is rejected with 409 so the client can
+   * refresh and retry.
+   */
+  updatedAt: z.string().min(1).optional(),
+  /**
+   * Stock is not edited through this route. It is a cached total owned by the
+   * stock ledger; adjustments must go through
+   * `PATCH /api/admin/inventory/products/:id` with a signed delta and a reason.
+   */
+  stock: z.boolean().optional(),
 });
 
 export const UNITS = ['kg', 'each', 'pint', 'bunch', 'crate'] as const;

@@ -5,6 +5,7 @@ import { productInputSchema, priceLabelFor, requireAdmin, slugify } from '@/lib/
 import { describeStock, stockState } from '@/lib/stock';
 import { storeProductImage } from '@/lib/uploads';
 import { error, json } from '@/lib/http';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * Catalogue management.
@@ -93,8 +94,18 @@ export async function POST(request: Request) {
       dietary: input.dietary,
       imageFiles,
       active: true,
+      updatedAt: sql`datetime('now')`,
     })
     .returning();
+
+  await recordActivity({
+    action: 'product.create',
+    entity: 'product',
+    entityId: created.id,
+    after: { name: created.name, priceValue: created.priceValue, unit: created.unit },
+    adminId: admin.id,
+    adminEmail: admin.email,
+  });
 
   return json(
     {

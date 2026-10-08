@@ -1,10 +1,11 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { products } from '@/db/schema';
+import { productPriceHistory, products } from '@/db/schema';
 import { priceLabelFor, productUpdateSchema, requireAdmin } from '@/lib/catalogue';
 import { describeStock, stockState } from '@/lib/stock';
 import { storeProductImage } from '@/lib/uploads';
 import { error, json } from '@/lib/http';
+import { recordActivity } from '@/lib/activity';
 
 /**
  * Update or withdraw one product.
@@ -12,6 +13,12 @@ import { error, json } from '@/lib/http';
  * PATCH changes fields. DELETE withdraws rather than deletes: the row stays so
  * past orders keep referring to something real, and the product can be brought
  * back by setting active to true.
+ *
+ * Price and unit changes are recorded in `product_price_history` so the full
+ * audit trail is queryable without parsing product revisions. Stock is not
+ * edited here: it is a cached total owned by the stock ledger, and adjustments
+ * must go through `PATCH /api/admin/inventory/products/:id` with a signed delta
+ * and a reason.
  */
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -52,18 +59,28 @@ export async function PATCH(request: Request, { params }: Ctx) {
     if (clash) return error(`Another product already uses the slug "${input.slug}".`, 409);
   }
 
+  if (input.stock !== undefined) {
+    return error('Stock is not editable through this route. Use PATCH /api/admin/inventory/products/' + id + ' with a signed delta and a reason.', 422);
+  }
+
+  if (input.updatedAt !== undefined && input.updatedAt !== existing.updatedAt) {
+    return error('This product was modified by someone else. Please refresh and try again.', 409);
+  }
+
   const set: Partial<typeof products.$inferInsert> = {};
+  set.updatedAt = sql`datetime('now')` as unknown as string;
 
   if (input.name !== undefined) set.name = input.name;
   if (input.slug !== undefined) set.slug = input.slug;
   if (input.description !== undefined) set.description = input.description;
   if (input.farm !== undefined) set.farm = input.farm;
   if (input.location !== undefined) set.location = input.location;
-  if (input.stock !== undefined) set.stock = input.stock;
   if (input.dietary !== undefined) set.dietary = input.dietary;
   if (input.active !== undefined) set.active = input.active;
 
-  // Price and its label move together, so the two cannot disagree.
+  const priceChanged = input.priceValue !== undefined && input.priceValue !== existing.priceValue;
+  const unitChanged = input.unit !== undefined && input.unit !== existing.unit;
+
   if (input.priceValue !== undefined) set.priceValue = input.priceValue;
   const unit = input.unit ?? existing.unit;
   if (input.priceValue !== undefined || input.unit !== undefined) {
@@ -74,17 +91,50 @@ export async function PATCH(request: Request, { params }: Ctx) {
   if (input.imageDataUrl) {
     try {
       const stored = await storeProductImage(input.imageDataUrl);
-      // Append rather than replace, so an existing photo survives an edit that
-      // only meant to change the price.
       set.imageFiles = [...existing.imageFiles, `uploads/${stored.filename}`];
     } catch (err) {
       return error(err instanceof Error ? err.message : 'Image could not be stored', 422);
     }
   }
 
-  const [updated] = await db.update(products).set(set).where(eq(products.id, existing.id)).returning();
+  const [updated] = await db.transaction(async (tx) => {
+    const [row] = await tx.update(products).set(set).where(eq(products.id, existing.id)).returning();
 
-  return json({ data: present(updated), meta: { updatedBy: admin.email } });
+    if (priceChanged || unitChanged) {
+      await tx.insert(productPriceHistory).values({
+        productId: row.id,
+        priceValue: row.priceValue,
+        unit: row.unit,
+        priceLabel: row.priceLabel,
+        changedByAdminId: admin.id,
+        changedByEmail: admin.email,
+      });
+    }
+
+    return [row];
+  });
+
+  await recordActivity({
+    action: 'product.update',
+    entity: 'product',
+    entityId: updated.id,
+    before: {
+      name: existing.name,
+      priceValue: existing.priceValue,
+      unit: existing.unit,
+      active: existing.active,
+    },
+    after: {
+      name: updated.name,
+      priceValue: updated.priceValue,
+      unit: updated.unit,
+      active: updated.active,
+    },
+    adminId: admin.id,
+    adminEmail: admin.email,
+  });
+
+  return json({ data: present(updated), meta: { updatedBy: admin.email, priceChanged, unitChanged } });
 }
 
 export async function DELETE(request: Request, { params }: Ctx) {
@@ -100,6 +150,16 @@ export async function DELETE(request: Request, { params }: Ctx) {
     .set({ active: false })
     .where(eq(products.id, existing.id))
     .returning();
+
+  await recordActivity({
+    action: 'product.update',
+    entity: 'product',
+    entityId: withdrawn.id,
+    before: { active: existing.active },
+    after: { active: false },
+    adminId: admin.id,
+    adminEmail: admin.email,
+  });
 
   return json({
     data: present(withdrawn),

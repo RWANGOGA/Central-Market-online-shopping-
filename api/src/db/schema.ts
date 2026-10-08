@@ -33,9 +33,44 @@ export const products = sqliteTable('products', {
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
+  /**
+   * Updated by the application on every PATCH. Used for optimistic concurrency:
+   * the client sends the value it last saw, and a mismatch returns 409.
+   *
+   * SQLite refuses a non-constant default on ALTER TABLE, so drizzle-kit push
+   * adds this with an empty default. The application writes it explicitly.
+   */
+  updatedAt: text('updated_at').notNull().default(''),
 }, (table) => [
   // The low-stock list is a WHERE on this pair, run on every dashboard load.
   index('idx_products_stock_alert').on(table.active, table.stock),
+]);
+
+/**
+ * Immutable audit trail for price and unit changes.
+ *
+ * A price change is not just a new number on a product row: it is a dated event
+ * that disputes, analytics, and vendor reconciliation all depend on. This table
+ * stores the before and after so the full history is queryable without parsing
+ * product revisions.
+ */
+export const productPriceHistory = sqliteTable('product_price_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  productId: integer('product_id')
+    .notNull()
+    .references(() => products.id, { onDelete: 'cascade' }),
+  priceValue: integer('price_value').notNull(),
+  unit: text('unit').notNull(),
+  priceLabel: text('price_label').notNull(),
+  changedByAdminId: integer('changed_by_admin_id').references(() => admins.id, {
+    onDelete: 'set null',
+  }),
+  changedByEmail: text('changed_by_email'),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+}, (table) => [
+  index('idx_price_history_product').on(table.productId, table.createdAt),
 ]);
 
 /**
@@ -147,6 +182,30 @@ export const adminLoginAttempts = sqliteTable('admin_login_attempts', {
     .notNull()
     .default(sql`(datetime('now'))`),
 });
+
+/**
+ * Append-only audit trail for admin actions.
+ *
+ * Every meaningful mutation — product update, order status change, inventory
+ * adjustment, purchase order receipt — is recorded here so the activity feed
+ * and the export endpoint can answer "who did what, and when" without
+ * reconstructing it from business tables.
+ */
+export const adminActivityLog = sqliteTable('admin_activity_log', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  adminId: integer('admin_id').references(() => admins.id, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  entity: text('entity').notNull(),
+  entityId: text('entity_id'),
+  before: text('before', { mode: 'json' }),
+  after: text('after', { mode: 'json' }),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+}, (table) => [
+  index('idx_activity_admin').on(table.adminId, table.createdAt),
+  index('idx_activity_entity').on(table.entity, table.entityId),
+]);
 
 export const orders = sqliteTable('orders', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -475,6 +534,8 @@ export const payments = sqliteTable('payments', {
 
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
+export type ProductPriceHistory = typeof productPriceHistory.$inferSelect;
+export type NewProductPriceHistory = typeof productPriceHistory.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type Cart = typeof carts.$inferSelect;
@@ -497,3 +558,5 @@ export type NewPayment = typeof payments.$inferInsert;
 export type Admin = typeof admins.$inferSelect;
 export type AdminSession = typeof adminSessions.$inferSelect;
 export type AdminLoginAttempt = typeof adminLoginAttempts.$inferSelect;
+export type AdminActivityLog = typeof adminActivityLog.$inferSelect;
+export type NewAdminActivityLog = typeof adminActivityLog.$inferInsert;
