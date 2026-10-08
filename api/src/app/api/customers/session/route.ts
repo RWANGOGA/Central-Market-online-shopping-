@@ -4,6 +4,8 @@ import { customerSessions, customers } from '@/db/schema';
 import { json } from '@/lib/http';
 import { hashToken } from '@/lib/customerAuth';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   const cookie = request.headers.get('cookie') || '';
   const match = cookie.match(/mk_customer_session=([^;]+)/);

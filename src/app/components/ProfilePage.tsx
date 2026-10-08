@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { formatUgx } from "../lib/currency";
@@ -67,6 +67,7 @@ export default function ProfilePage({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedInfo, setEditedInfo] = useState(customerInfo);
+  const [orderFilter, setOrderFilter] = useState<'all' | 'active' | 'delivered'>('all');
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -126,6 +127,27 @@ export default function ProfilePage({
   const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const activeOrders = orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
   const deliveredOrders = orders.filter(o => o.status === 'delivered');
+
+  const showAllOrders = () => {
+    setOrderFilter('all');
+    setActiveTab('orders');
+  };
+
+  const showActiveOrders = () => {
+    setOrderFilter('active');
+    setActiveTab('orders');
+  };
+
+  const showDeliveredOrders = () => {
+    setOrderFilter('delivered');
+    setActiveTab('orders');
+  };
+
+  const filteredOrders = useMemo(() => {
+    if (orderFilter === 'active') return orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
+    if (orderFilter === 'delivered') return orders.filter(o => o.status === 'delivered');
+    return orders;
+  }, [orders, orderFilter]);
 
   const handleSave = async () => {
     try {
@@ -295,30 +317,42 @@ export default function ProfilePage({
           {activeTab === 'overview' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                <button
+                  onClick={showAllOrders}
+                  className="border border-neutral-200 rounded-xl p-4 bg-white text-left hover:border-[#426b1f] hover:shadow-sm transition-all cursor-pointer"
+                >
                   <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Total Orders</p>
                   <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
                     {totalOrders}
                   </p>
-                </div>
-                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                </button>
+                <button
+                  onClick={showAllOrders}
+                  className="border border-neutral-200 rounded-xl p-4 bg-white text-left hover:border-[#426b1f] hover:shadow-sm transition-all cursor-pointer"
+                >
                   <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Total Spent</p>
                   <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
                     {formatUgx(totalSpent)}
                   </p>
-                </div>
-                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                </button>
+                <button
+                  onClick={showActiveOrders}
+                  className="border border-neutral-200 rounded-xl p-4 bg-white text-left hover:border-[#426b1f] hover:shadow-sm transition-all cursor-pointer"
+                >
                   <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Active Orders</p>
                   <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
                     {activeOrders.length}
                   </p>
-                </div>
-                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                </button>
+                <button
+                  onClick={showDeliveredOrders}
+                  className="border border-neutral-200 rounded-xl p-4 bg-white text-left hover:border-[#426b1f] hover:shadow-sm transition-all cursor-pointer"
+                >
                   <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Delivered</p>
                   <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
                     {deliveredOrders.length}
                   </p>
-                </div>
+                </button>
               </div>
 
               {/* Recent Activity */}
@@ -389,12 +423,22 @@ export default function ProfilePage({
           {/* Tab: Orders */}
           {activeTab === 'orders' && (
             <div className="space-y-3 font-['Inter:Regular',_sans-serif]">
+              {orderFilter !== 'all' && (
+                <button
+                  onClick={() => setOrderFilter('all')}
+                  className="text-[13px] text-[#426b1f] font-medium hover:underline"
+                >
+                  ← Show all orders
+                </button>
+              )}
               {ordersLoading ? (
                 <div className="p-8 text-center text-[#757575] text-[14px]">Loading orders...</div>
-              ) : orders.length === 0 ? (
-                <div className="p-8 text-center text-[#757575] text-[14px]">No orders yet.</div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="p-8 text-center text-[#757575] text-[14px]">
+                  {orderFilter === 'active' ? 'No active orders.' : orderFilter === 'delivered' ? 'No delivered orders yet.' : 'No orders yet.'}
+                </div>
               ) : (
-                orders.map((order) => {
+                filteredOrders.map((order) => {
                   const status = statusConfig[order.status] || { label: order.status, className: 'bg-neutral-100 text-neutral-800' };
                   return (
                     <div key={order.id} className="border border-neutral-200 rounded-xl p-4 bg-white space-y-2">

@@ -6,6 +6,8 @@ import { error, json } from '@/lib/http';
 import { hashPassword, createSessionToken, sessionCookie, getSessionExpiry } from '@/lib/customerAuth';
 import { checkLocation } from '@/lib/locationGuard';
 
+export const dynamic = 'force-dynamic';
+
 const signupSchema = z.object({
   fullName: z.string().min(2).max(120),
   phone: z.string().min(10),

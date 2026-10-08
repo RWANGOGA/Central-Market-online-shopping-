@@ -4,6 +4,8 @@ import { customers, orders, orderItems, orderStatusEvents, payments } from '@/db
 import { getCurrentCustomer } from '@/lib/customerSession';
 import { error, json } from '@/lib/http';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const customer = await getCurrentCustomer(request);
   if (!customer) return error('Not signed in', 401);
