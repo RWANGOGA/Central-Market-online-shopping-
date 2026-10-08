@@ -105,7 +105,8 @@ export default function ProfilePage({
 
   useEffect(() => {
     loadProfile();
-  }, [loadProfile]);
+    loadOrders();
+  }, [loadProfile, loadOrders]);
 
   useEffect(() => {
     if (activeTab === 'orders') {
@@ -121,8 +122,10 @@ export default function ProfilePage({
 
   const memberSince = profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('en-UG', { month: 'long', year: 'numeric' }) : '2024';
 
-  const totalSpent = (orders ?? []).reduce((sum, order) => sum + (order.total || 0), 0);
-  const activeOrders = (orders ?? []).filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
+  const totalOrders = orders.length;
+  const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+  const activeOrders = orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
+  const deliveredOrders = orders.filter(o => o.status === 'delivered');
 
   const handleSave = async () => {
     try {
@@ -295,7 +298,7 @@ export default function ProfilePage({
                 <div className="border border-neutral-200 rounded-xl p-4 bg-white">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Total Orders</p>
                   <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
-                    {profile?.orderCount ?? orders.length}
+                    {totalOrders}
                   </p>
                 </div>
                 <div className="border border-neutral-200 rounded-xl p-4 bg-white">
@@ -313,7 +316,7 @@ export default function ProfilePage({
                 <div className="border border-neutral-200 rounded-xl p-4 bg-white">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Delivered</p>
                   <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
-                    {orders.filter(o => o.status === 'delivered').length}
+                    {deliveredOrders.length}
                   </p>
                 </div>
               </div>
