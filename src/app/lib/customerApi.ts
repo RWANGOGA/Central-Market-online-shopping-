@@ -73,20 +73,14 @@ export interface CustomerOrdersResult {
   };
 }
 
-function getCustomerPhone(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('customer_phone');
-}
-
 function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const phone = getCustomerPhone();
   const headers = new Headers(options.headers);
-  if (phone) headers.set('X-Customer-Phone', phone);
   if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
 
   return fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
+    credentials: 'include',
   }).then(async (res) => {
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
@@ -117,14 +111,29 @@ export async function fetchCustomerOrders(params?: { limit?: number; offset?: nu
   return data.data;
 }
 
-export function saveCustomerPhone(phone: string) {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('customer_phone', phone);
-  }
+export async function loginCustomer(phone: string, password: string): Promise<CustomerProfile> {
+  const data = await request<{ data: CustomerProfile }>('/customers/login', {
+    method: 'POST',
+    body: JSON.stringify({ phone, password }),
+  });
+  return data.data;
 }
 
-export function clearCustomerPhone() {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('customer_phone');
-  }
+export async function signupCustomer(data: {
+  fullName: string;
+  phone: string;
+  password: string;
+  region: string;
+  district?: string;
+  address: string;
+}): Promise<CustomerProfile> {
+  const result = await request<{ data: CustomerProfile }>('/customers/signup', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return result.data;
+}
+
+export async function logoutCustomer(): Promise<void> {
+  await request('/customers/session', { method: 'POST' });
 }

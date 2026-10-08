@@ -88,12 +88,27 @@ export const customers = sqliteTable('customers', {
   fullName: text('full_name').notNull(),
   phone: text('phone').notNull().unique(),
   email: text('email').unique(),
+  passwordHash: text('password_hash').notNull().default(''),
   region: text('region').notNull(),
   district: text('district'),
   subCounty: text('sub_county'),
   parish: text('parish'),
   village: text('village'),
   address: text('address').notNull(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const customerSessions = sqliteTable('customer_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  customerId: integer('customer_id')
+    .notNull()
+    .references(() => customers.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  userAgent: text('user_agent'),
+  expiresAt: text('expires_at').notNull(),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
@@ -538,6 +553,8 @@ export type ProductPriceHistory = typeof productPriceHistory.$inferSelect;
 export type NewProductPriceHistory = typeof productPriceHistory.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
+export type CustomerSession = typeof customerSessions.$inferSelect;
+export type NewCustomerSession = typeof customerSessions.$inferInsert;
 export type Cart = typeof carts.$inferSelect;
 export type CartItem = typeof cartItems.$inferSelect;
 export type Order = typeof orders.$inferSelect;

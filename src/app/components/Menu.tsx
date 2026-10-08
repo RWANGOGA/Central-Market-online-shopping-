@@ -6,13 +6,32 @@ interface MenuProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (screen: string) => void;
+  isLoggedIn?: boolean;
 }
 
-export default function Menu({ isOpen, onClose, onNavigate }: MenuProps) {
+export default function Menu({ isOpen, onClose, onNavigate, isLoggedIn = false }: MenuProps) {
   const handleNavigation = (screen: string) => {
     onNavigate(screen);
     onClose();
   };
+
+  const menuItems = isLoggedIn
+    ? [
+        { label: "Shop", screen: "list" },
+        { label: "Coverage map", screen: "map" },
+        { label: "Newsstand", screen: "newsstand" },
+        { label: "Who we are", screen: "about" },
+        { label: "My Page", screen: "profile" },
+        { label: "Basket", screen: "basket" },
+      ]
+    : [
+        { label: "Shop", screen: "list" },
+        { label: "Coverage map", screen: "map" },
+        { label: "Newsstand", screen: "newsstand" },
+        { label: "Who we are", screen: "about" },
+        { label: "Sign in", screen: "login" },
+        { label: "Basket", screen: "basket" },
+      ];
 
   return (
     <AnimatePresence>
@@ -27,7 +46,7 @@ export default function Menu({ isOpen, onClose, onNavigate }: MenuProps) {
             className="absolute inset-0 bg-black/50 z-40"
             onClick={onClose}
           />
-          
+
           {/* Menu */}
           <motion.div
             initial={{ x: "-100%" }}
@@ -43,10 +62,10 @@ export default function Menu({ isOpen, onClose, onNavigate }: MenuProps) {
           >
             {/* Background Illustration */}
             <MaskGroup />
-            
+
             {/* Menu Items */}
-            <MenuItems onNavigate={handleNavigation} />
-            
+            <MenuItems onNavigate={handleNavigation} items={menuItems} />
+
             {/* Close Button */}
             <CloseButton onClick={onClose} />
           </motion.div>
@@ -62,23 +81,14 @@ function MaskGroup() {
 
 interface MenuItemsProps {
   onNavigate: (screen: string) => void;
+  items: { label: string; screen: string }[];
 }
 
-function MenuItems({ onNavigate }: MenuItemsProps) {
-  const menuItems = [
-    { label: "Shop", screen: "list" },
-    { label: "Coverage map", screen: "map" },
-    { label: "Staff", screen: "admin" },
-    { label: "Newsstand", screen: "newsstand" },
-    { label: "Who we are", screen: "about" },
-    { label: "My Profile", screen: "profile" },
-    { label: "Basket", screen: "basket" },
-  ];
-
+function MenuItems({ onNavigate, items }: MenuItemsProps) {
   return (
     <div className="absolute left-4 top-[95px]">
       <div className="box-border content-stretch flex flex-col gap-8 items-start justify-start p-0 relative">
-        {menuItems.map((item) => (
+        {items.map((item) => (
           <button
             key={item.screen}
             onClick={() => onNavigate(item.screen)}

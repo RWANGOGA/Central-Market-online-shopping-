@@ -21,6 +21,8 @@ import OrderConfirmationPage from './components/OrderConfirmationPage';
 import NewsstandPage from './components/NewsstandPage';
 import AboutPage from './components/AboutPage';
 import ProfilePage from './components/ProfilePage';
+import LoginPage from './components/LoginPage';
+import SignupPage from './components/SignupPage';
 import AddToCartOverlay from './components/AddToCartOverlay';
 import Menu from './components/Menu';
 import MapPage from './components/MapPage';
@@ -28,7 +30,7 @@ import AdminPage from './components/AdminPage';
 import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './lib/cartApi';
 import { fetchStock, applyStockDelta, type StockLevel } from './lib/stockApi';
 import { useCatalogue, type CatalogueProduct } from './lib/catalogue';
-import { saveCustomerPhone, clearCustomerPhone } from './lib/customerApi';
+import { fetchCustomerProfile } from './lib/customerApi';
 
 // Enhanced product data with descriptions and locations
 /**
@@ -169,7 +171,7 @@ const FALLBACK_CATALOGUE: CatalogueProduct[] = [
 const STOCK_POLL_MS = 30_000;
 
 type SortOption = 'default' | 'a-z' | 'price';
-type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile' | 'map' | 'admin';
+type ViewMode = 'list' | 'detail' | 'basket' | 'checkout' | 'payment' | 'confirmation' | 'orderConfirmation' | 'newsstand' | 'about' | 'profile' | 'map' | 'admin' | 'login' | 'signup';
 
 interface CartItem {
   id: number;
@@ -178,7 +180,6 @@ interface CartItem {
   priceValue: number;
   image: string;
   quantity: number;
-  /** Sale unit, so a basket line reads "3 kg" and not a bare number. */
   unit: string;
 }
 
@@ -193,10 +194,22 @@ interface CustomerInfo {
   phone: string;
   region: string;
   district: string;
-  /** Carried through so a delivery can be as precise as the data allows. */
   subCounty: string;
   parish: string;
   village: string;
+  address: string;
+}
+
+interface CustomerSession {
+  id: number;
+  fullName: string;
+  phone: string;
+  email?: string;
+  region: string;
+  district?: string;
+  subCounty?: string;
+  parish?: string;
+  village?: string;
   address: string;
 }
 
@@ -225,8 +238,7 @@ export default function App() {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedProduct, setSelectedProduct] = useState<CatalogueProduct | null>(null);
-  
-  // Customer information from checkout
+
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     fullName: '',
     phone: '',
@@ -237,7 +249,9 @@ export default function App() {
     village: '',
     address: ''
   });
-  
+
+  const [customerSession, setCustomerSession] = useState<CustomerSession | null>(null);
+
   // Add to cart overlay state
   const [showOverlay, setShowOverlay] = useState(false);
   const [overlayProduct, setOverlayProduct] = useState<OverlayProduct | null>(null);
@@ -447,9 +461,6 @@ export default function App() {
 
   const handleProceedToPayment = (customerData: CustomerInfo) => {
     setCustomerInfo(customerData);
-    if (customerData.phone.trim()) {
-      saveCustomerPhone(customerData.phone.trim());
-    }
     setViewMode('payment');
   };
 
@@ -494,7 +505,6 @@ export default function App() {
   const handleShopFromOrderConfirmation = () => {
     setViewMode('list');
     setSelectedProduct(null);
-    clearCustomerPhone();
     setCustomerInfo({
       fullName: '',
       phone: '',
@@ -508,8 +518,57 @@ export default function App() {
   };
 
   const handleMenuNavigation = (screen: string) => {
+    if (screen === 'profile' && !customerSession) {
+      setViewMode('login');
+      return;
+    }
     setViewMode(screen as ViewMode);
     setSelectedProduct(null);
+  };
+
+  const handleLoginSuccess = (customer: CustomerSession) => {
+    setCustomerSession(customer);
+    setCustomerInfo({
+      fullName: customer.fullName,
+      phone: customer.phone,
+      region: customer.region,
+      district: customer.district || '',
+      subCounty: customer.subCounty || '',
+      parish: customer.parish || '',
+      village: customer.village || '',
+      address: customer.address,
+    });
+    setViewMode('profile');
+  };
+
+  const handleSignupSuccess = (customer: CustomerSession) => {
+    setCustomerSession(customer);
+    setCustomerInfo({
+      fullName: customer.fullName,
+      phone: customer.phone,
+      region: customer.region,
+      district: customer.district || '',
+      subCounty: customer.subCounty || '',
+      parish: customer.parish || '',
+      village: customer.village || '',
+      address: customer.address,
+    });
+    setViewMode('profile');
+  };
+
+  const handleLogout = () => {
+    setCustomerSession(null);
+    setCustomerInfo({
+      fullName: '',
+      phone: '',
+      region: '',
+      district: '',
+      subCounty: '',
+      parish: '',
+      village: '',
+      address: ''
+    });
+    setViewMode('list');
   };
 
   // Render current view based on viewMode
@@ -647,11 +706,31 @@ export default function App() {
         return (
           <ProfilePage
             customerInfo={customerInfo}
+            customerSession={customerSession}
             onUpdateCustomerInfo={setCustomerInfo}
             onBack={handleBackToList}
             onMenuClick={() => setIsNavOpen(true)}
             onCartClick={handleCartClick}
+            onLogout={handleLogout}
             cartCount={cartCount}
+          />
+        );
+
+      case 'login':
+        return (
+          <LoginPage
+            onBack={() => setViewMode('list')}
+            onLogin={handleLoginSuccess}
+            onNavigateToSignup={() => setViewMode('signup')}
+          />
+        );
+
+      case 'signup':
+        return (
+          <SignupPage
+            onBack={() => setViewMode('list')}
+            onSignup={handleSignupSuccess}
+            onNavigateToLogin={() => setViewMode('login')}
           />
         );
       
@@ -679,6 +758,7 @@ export default function App() {
           isOpen={isNavOpen}
           onClose={() => setIsNavOpen(false)}
           onNavigate={handleMenuNavigation}
+          isLoggedIn={!!customerSession}
         />
       </div>
     </div>

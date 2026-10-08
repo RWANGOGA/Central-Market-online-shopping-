@@ -1,28 +1,12 @@
 import { desc, eq, sql, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { customers, orderItems, orderStatusEvents, orders, payments } from '@/db/schema';
+import { getCurrentCustomer } from '@/lib/customerSession';
 import { error, json } from '@/lib/http';
 
-function normalisePhone(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.replace(/[\s()-]/g, '').replace(/^\+?256/, '0');
-}
-
-async function customerFromRequest(request: Request): Promise<typeof customers.$inferSelect | null> {
-  const url = new URL(request.url);
-  const phone = normalisePhone(
-    request.headers.get('x-customer-phone') ||
-      url.searchParams.get('phone') ||
-      ''
-  );
-  if (!phone) return null;
-  const row = await db.query.customers.findFirst({ where: eq(customers.phone, phone) });
-  return row ?? null;
-}
-
 export async function GET(request: Request) {
-  const customer = await customerFromRequest(request);
-  if (!customer) return error('Provide a customer phone via ?phone= or X-Customer-Phone header', 401);
+  const customer = await getCurrentCustomer(request);
+  if (!customer) return error('Not signed in', 401);
 
   const url = new URL(request.url);
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 100);

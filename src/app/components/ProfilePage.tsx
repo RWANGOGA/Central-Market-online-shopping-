@@ -15,6 +15,18 @@ interface ProfilePageProps {
     village: string;
     address: string;
   };
+  customerSession: {
+    id: number;
+    fullName: string;
+    phone: string;
+    email?: string;
+    region: string;
+    district?: string;
+    subCounty?: string;
+    parish?: string;
+    village?: string;
+    address: string;
+  } | null;
   onUpdateCustomerInfo: (info: {
     fullName: string;
     phone: string;
@@ -28,6 +40,7 @@ interface ProfilePageProps {
   onBack: () => void;
   onMenuClick: () => void;
   onCartClick: () => void;
+  onLogout: () => void;
   cartCount: number;
 }
 
@@ -35,10 +48,12 @@ type Tab = 'overview' | 'orders' | 'details' | 'preferences';
 
 export default function ProfilePage({
   customerInfo,
+  customerSession,
   onUpdateCustomerInfo,
   onBack,
   onMenuClick,
   onCartClick,
+  onLogout,
   cartCount
 }: ProfilePageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -201,21 +216,31 @@ export default function ProfilePage({
         <div className="absolute left-6 right-6 top-[103px]">
           <div className="box-border content-stretch flex flex-col font-normal items-center justify-start leading-[0] p-0 relative text-left w-full">
             <div className="basis-0 flex flex-col font-['Newsreader:Regular',_sans-serif] grow justify-center min-h-px min-w-px relative shrink-0 text-[#000000] text-[24px] tracking-[-0.48px]">
-              <p className="block leading-[32px] text-[24px]">My Profile</p>
+              <p className="block leading-[32px] text-[24px]">My Page</p>
             </div>
-            <button
-              onClick={onBack}
-              className="cursor-pointer flex items-center font-['Inter:Regular',_sans-serif] not-italic relative shrink-0 text-[#426b1f] text-[14px] text-nowrap tracking-[-0.14px] hover:opacity-80 transition-opacity"
-            >
-              <div className="flex flex-row items-center gap-1">
-                <div className="w-3 h-3">
-                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
-                    <path d="M7.5 9L4.5 6L7.5 3" stroke="#426b1f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+            <div className="flex gap-3">
+              <button
+                onClick={onBack}
+                className="cursor-pointer flex items-center font-['Inter:Regular',_sans-serif] not-italic relative shrink-0 text-[#426b1f] text-[14px] text-nowrap tracking-[-0.14px] hover:opacity-80 transition-opacity"
+              >
+                <div className="flex flex-row items-center gap-1">
+                  <div className="w-3 h-3">
+                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
+                      <path d="M7.5 9L4.5 6L7.5 3" stroke="#426b1f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">Back</p>
                 </div>
-                <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">Back</p>
-              </div>
-            </button>
+              </button>
+              {customerSession && (
+                <button
+                  onClick={onLogout}
+                  className="cursor-pointer flex items-center font-['Inter:Regular',_sans-serif] not-italic relative shrink-0 text-red-600 text-[14px] text-nowrap tracking-[-0.14px] hover:opacity-80 transition-opacity"
+                >
+                  <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">Sign out</p>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

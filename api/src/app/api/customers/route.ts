@@ -83,13 +83,15 @@ export async function POST(request: Request) {
     fullName: input.fullName,
     phone: input.phone,
     email: input.email ?? null,
+    passwordHash: '',
+    active: true,
     address: input.address,
     region: location.region,
     district: location.district,
     subCounty: location.subCounty,
     parish: location.parish,
     village: location.village,
-  };
+  } as const;
 
   const existing = await db.query.customers.findFirst({
     where: eq(customers.phone, input.phone),
