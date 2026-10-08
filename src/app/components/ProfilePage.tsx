@@ -41,6 +41,7 @@ interface ProfilePageProps {
   onMenuClick: () => void;
   onCartClick: () => void;
   onLogout: () => void;
+  onShopClick: () => void;
   cartCount: number;
 }
 
@@ -54,6 +55,7 @@ export default function ProfilePage({
   onMenuClick,
   onCartClick,
   onLogout,
+  onShopClick,
   cartCount
 }: ProfilePageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -274,6 +276,17 @@ export default function ProfilePage({
               </p>
             </div>
           </div>
+
+          {/* Shop CTA */}
+          <button
+            onClick={onShopClick}
+            className="w-full bg-[#426b1f] text-white font-['Inter:Medium',_sans-serif] text-[15px] py-3.5 rounded-xl hover:bg-[#355a19] transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+            </svg>
+            Continue Shopping
+          </button>
 
           {/* Overview Tab - Stats */}
           {activeTab === 'overview' && (

@@ -740,6 +740,7 @@ export default function App() {
             onMenuClick={() => setIsNavOpen(true)}
             onCartClick={handleCartClick}
             onLogout={handleLogout}
+            onShopClick={handleBackToList}
             cartCount={cartCount}
           />
         );
