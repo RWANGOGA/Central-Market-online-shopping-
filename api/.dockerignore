@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.gitignore
+README.md
+*.log
+.DS_Store
+.env
+.env.local
+local.db
+*.db
+*.sqlite
+Dockerfile*
+.dockerignore
+.kilo
+.vscode
+.idea
