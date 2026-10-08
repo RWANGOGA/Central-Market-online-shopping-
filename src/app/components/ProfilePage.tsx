@@ -1,27 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { formatUgx } from "../lib/currency";
-
-interface CustomerInfo {
-  fullName: string;
-  phone: string;
-  region: string;
-  district: string;
-  subCounty: string;
-  parish: string;
-  village: string;
-  address: string;
-}
+import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, type CustomerProfile, type CustomerOrder } from '../lib/customerApi';
 
 interface ProfilePageProps {
-  customerInfo: CustomerInfo;
-  onUpdateCustomerInfo: (info: CustomerInfo) => void;
+  customerInfo: {
+    fullName: string;
+    phone: string;
+    region: string;
+    district: string;
+    subCounty: string;
+    parish: string;
+    village: string;
+    address: string;
+  };
+  onUpdateCustomerInfo: (info: {
+    fullName: string;
+    phone: string;
+    region: string;
+    district: string;
+    subCounty: string;
+    parish: string;
+    village: string;
+    address: string;
+  }) => void;
   onBack: () => void;
   onMenuClick: () => void;
   onCartClick: () => void;
   cartCount: number;
 }
+
+type Tab = 'overview' | 'orders' | 'details' | 'preferences';
 
 export default function ProfilePage({
   customerInfo,
@@ -31,28 +41,103 @@ export default function ProfilePage({
   onCartClick,
   cartCount
 }: ProfilePageProps) {
-  const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'preferences'>('details');
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedInfo, setEditedInfo] = useState<CustomerInfo>(customerInfo);
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [orders, setOrders] = useState<CustomerOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedInfo, setEditedInfo] = useState(customerInfo);
 
-  // Fallback details if customer hasn't purchased yet
-  const displayName = customerInfo.fullName.trim() || 'Guest shopper';
-  const displayPhone = customerInfo.phone.trim() || 'No number saved';
-  const displayAddress = customerInfo.address.trim() || 'No delivery address saved';
-  const displayPlace = [customerInfo.district, customerInfo.region].filter(Boolean).join(', ');
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchCustomerProfile();
+      setProfile(data);
+      onUpdateCustomerInfo({
+        fullName: data.fullName,
+        phone: data.phone,
+        region: data.region,
+        district: data.district || '',
+        subCounty: data.subCounty || '',
+        parish: data.parish || '',
+        village: data.village || '',
+        address: data.address,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load profile');
+    } finally {
+      setLoading(false);
+    }
+  }, [onUpdateCustomerInfo]);
+
+  const loadOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try {
+      const data = await fetchCustomerOrders({ limit: 50 });
+      setOrders(data.data);
+    } catch {
+      // Orders are optional; don't block the rest of the profile
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  useEffect(() => {
+    if (activeTab === 'orders') {
+      loadOrders();
+    }
+  }, [activeTab, loadOrders]);
+
+  const displayName = profile?.fullName?.trim() || customerInfo.fullName.trim() || 'Guest shopper';
+  const displayPhone = profile?.phone?.trim() || customerInfo.phone.trim() || 'No number saved';
+  const displayAddress = profile?.address?.trim() || customerInfo.address.trim() || 'No delivery address saved';
+  const displayPlace = [profile?.district || customerInfo.district, profile?.region || customerInfo.region].filter(Boolean).join(', ');
   const displayPlaceOrDefault = displayPlace || 'Kampala, Central Region';
 
-  const handleSave = () => {
-    onUpdateCustomerInfo(editedInfo);
-    setIsEditing(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2500);
+  const memberSince = profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('en-UG', { month: 'long', year: 'numeric' }) : '2024';
+
+  const totalSpent = orders.reduce((sum, order) => sum + order.total, 0);
+  const activeOrders = orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
+
+  const handleSave = async () => {
+    try {
+      const updated = await updateCustomerProfile({
+        fullName: editedInfo.fullName,
+        address: editedInfo.address,
+        region: editedInfo.region,
+        district: editedInfo.district,
+        subCounty: editedInfo.subCounty,
+        parish: editedInfo.parish,
+        village: editedInfo.village,
+      });
+      setProfile(updated);
+      onUpdateCustomerInfo(editedInfo);
+      setIsEditing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save changes');
+    }
+  };
+
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Pending', className: 'bg-yellow-100 text-yellow-800' },
+    processing: { label: 'Processing', className: 'bg-blue-100 text-blue-800' },
+    shipped: { label: 'Shipped', className: 'bg-purple-100 text-purple-800' },
+    delivered: { label: 'Delivered', className: 'bg-green-100 text-green-800' },
+    cancelled: { label: 'Cancelled', className: 'bg-red-100 text-red-800' },
   };
 
   return (
     <div className="bg-[#ffffff] relative size-full select-none">
-      {/* Status Bar */}
       <StatusBar />
 
       {/* Header */}
@@ -70,7 +155,7 @@ export default function ProfilePage({
           </div>
 
           {/* Cart Icon */}
-          <button 
+          <button
             onClick={onCartClick}
             aria-label="View basket"
             className="absolute right-5 rounded-2xl size-8 top-[18px] cursor-pointer"
@@ -114,27 +199,23 @@ export default function ProfilePage({
 
         {/* Sub Nav */}
         <div className="absolute left-6 right-6 top-[103px]">
-          <div className="box-border content-stretch flex flex-col gap-4 items-end justify-end p-0 relative w-full">
-            <div className="relative shrink-0 w-full">
-              <div className="box-border content-stretch flex flex-row font-normal items-center justify-start leading-[0] p-0 relative text-left w-full">
-                <div className="basis-0 flex flex-col font-['Newsreader:Regular',_sans-serif] grow justify-center min-h-px min-w-px relative shrink-0 text-[#000000] text-[24px] tracking-[-0.48px]">
-                  <p className="block leading-[32px] text-[24px]">My Profile</p>
-                </div>
-                <button
-                  onClick={onBack}
-                  className="cursor-pointer flex items-center font-['Inter:Regular',_sans-serif] not-italic relative shrink-0 text-[#426b1f] text-[14px] text-nowrap tracking-[-0.14px] hover:opacity-80 transition-opacity"
-                >
-                  <div className="flex flex-row items-center gap-1">
-                    <div className="w-3 h-3">
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
-                        <path d="M7.5 9L4.5 6L7.5 3" stroke="#426b1f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">Back</p>
-                  </div>
-                </button>
-              </div>
+          <div className="box-border content-stretch flex flex-col font-normal items-center justify-start leading-[0] p-0 relative text-left w-full">
+            <div className="basis-0 flex flex-col font-['Newsreader:Regular',_sans-serif] grow justify-center min-h-px min-w-px relative shrink-0 text-[#000000] text-[24px] tracking-[-0.48px]">
+              <p className="block leading-[32px] text-[24px]">My Profile</p>
             </div>
+            <button
+              onClick={onBack}
+              className="cursor-pointer flex items-center font-['Inter:Regular',_sans-serif] not-italic relative shrink-0 text-[#426b1f] text-[14px] text-nowrap tracking-[-0.14px] hover:opacity-80 transition-opacity"
+            >
+              <div className="flex flex-row items-center gap-1">
+                <div className="w-3 h-3">
+                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
+                    <path d="M7.5 9L4.5 6L7.5 3" stroke="#426b1f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">Back</p>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -142,6 +223,18 @@ export default function ProfilePage({
       {/* Main Content Area */}
       <div className="absolute left-0 right-0 top-[149px] bottom-0 overflow-y-auto">
         <div className="px-6 pt-5 pb-10 space-y-5">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700 text-center">
+              {error}
+            </div>
+          )}
+
+          {saveSuccess && (
+            <div className="p-3 bg-[#426b1f]/10 border border-[#426b1f]/30 rounded-lg text-[13px] text-[#426b1f] font-['Inter:Regular',_sans-serif] text-center">
+              ✓ Profile updated successfully!
+            </div>
+          )}
+
           {/* User Bio Card */}
           <div className="border border-neutral-200 rounded-2xl p-4 bg-white flex items-center gap-4">
             <div className="size-14 rounded-full bg-[#426b1f] text-white flex items-center justify-center font-['Newsreader:Regular',_sans-serif] text-[22px] font-medium shrink-0">
@@ -152,20 +245,79 @@ export default function ProfilePage({
                 {displayName}
               </h2>
               <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] truncate">
-                Member since 2024 • Verified Farm Patron
+                Member since {memberSince} • Farm Patron
               </p>
             </div>
           </div>
 
+          {/* Overview Tab - Stats */}
+          {activeTab === 'overview' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Total Orders</p>
+                  <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
+                    {profile?.orderCount ?? orders.length}
+                  </p>
+                </div>
+                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Total Spent</p>
+                  <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
+                    {formatUgx(totalSpent)}
+                  </p>
+                </div>
+                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Active Orders</p>
+                  <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
+                    {activeOrders.length}
+                  </p>
+                </div>
+                <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#757575] mb-1">Delivered</p>
+                  <p className="font-['Newsreader:Regular',_sans-serif] text-[28px] text-[#000000] leading-none">
+                    {orders.filter(o => o.status === 'delivered').length}
+                  </p>
+                </div>
+              </div>
+
+              {/* Recent Activity */}
+              <div className="border border-neutral-200 rounded-xl p-4 bg-white">
+                <h3 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000] mb-3">Recent Orders</h3>
+                <div className="space-y-3">
+                  {orders.slice(0, 3).map((order) => {
+                    const status = statusConfig[order.status] || { label: order.status, className: 'bg-neutral-100 text-neutral-800' };
+                    return (
+                      <div key={order.id} className="flex items-center justify-between py-2 border-b border-neutral-100 last:border-0">
+                        <div>
+                          <p className="text-[13px] font-medium text-[#000000]">#{order.reference}</p>
+                          <p className="text-[12px] text-[#757575]">
+                            {new Date(order.createdAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })} • {order.items.length} item{order.items.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[13px] font-medium text-[#000000]">{formatUgx(order.total)}</p>
+                          <span className={`text-[11px] px-2 py-0.5 rounded ${status.className}`}>{status.label}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {orders.length === 0 && (
+                    <p className="text-[13px] text-[#757575] text-center py-4">No orders yet. Start shopping to see your history here.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Segmented Tab Controls */}
           <div className="flex rounded-lg bg-neutral-100 p-1 border border-neutral-200 text-[13px] font-['Inter:Regular',_sans-serif]">
             <button
-              onClick={() => setActiveTab('details')}
+              onClick={() => setActiveTab('overview')}
               className={`flex-1 py-1.5 rounded-md text-center transition-all ${
-                activeTab === 'details' ? 'bg-white text-[#426b1f] font-medium shadow-sm' : 'text-[#757575]'
+                activeTab === 'overview' ? 'bg-white text-[#426b1f] font-medium shadow-sm' : 'text-[#757575]'
               }`}
             >
-              Shipping Details
+              Overview
             </button>
             <button
               onClick={() => setActiveTab('orders')}
@@ -173,7 +325,15 @@ export default function ProfilePage({
                 activeTab === 'orders' ? 'bg-white text-[#426b1f] font-medium shadow-sm' : 'text-[#757575]'
               }`}
             >
-              Order History
+              Orders
+            </button>
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`flex-1 py-1.5 rounded-md text-center transition-all ${
+                activeTab === 'details' ? 'bg-white text-[#426b1f] font-medium shadow-sm' : 'text-[#757575]'
+              }`}
+            >
+              Details
             </button>
             <button
               onClick={() => setActiveTab('preferences')}
@@ -185,32 +345,64 @@ export default function ProfilePage({
             </button>
           </div>
 
-          {saveSuccess && (
-            <div className="p-3 bg-[#426b1f]/10 border border-[#426b1f]/30 rounded-lg text-[13px] text-[#426b1f] font-['Inter:Regular',_sans-serif] text-center">
-              ✓ Shipping details saved successfully!
+          {/* Tab: Orders */}
+          {activeTab === 'orders' && (
+            <div className="space-y-3 font-['Inter:Regular',_sans-serif]">
+              {ordersLoading ? (
+                <div className="p-8 text-center text-[#757575] text-[14px]">Loading orders...</div>
+              ) : orders.length === 0 ? (
+                <div className="p-8 text-center text-[#757575] text-[14px]">No orders yet.</div>
+              ) : (
+                orders.map((order) => {
+                  const status = statusConfig[order.status] || { label: order.status, className: 'bg-neutral-100 text-neutral-800' };
+                  return (
+                    <div key={order.id} className="border border-neutral-200 rounded-xl p-4 bg-white space-y-2">
+                      <div className="flex items-center justify-between text-[13px]">
+                        <span className="font-medium text-[#000000]">Order #{order.reference}</span>
+                        <span className={`${status.className} px-2 py-0.5 rounded text-[11px] font-semibold`}>{status.label}</span>
+                      </div>
+                      <p className="text-[12px] text-[#757575]">
+                        {new Date(order.createdAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })} • {order.items.length} item{order.items.length !== 1 ? 's' : ''}
+                      </p>
+                      <div className="text-[13px] text-[#000000] pt-1 border-t border-neutral-100 space-y-1">
+                        {order.items.map((item) => (
+                          <div key={item.id} className="flex justify-between">
+                            <span className="truncate mr-2">{item.name}</span>
+                            <span className="font-medium whitespace-nowrap">{item.quantity} × {formatUgx(item.priceValue)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-neutral-100">
+                        <span className="text-[12px] text-[#757575]">{order.region}{order.district ? `, ${order.district}` : ''}</span>
+                        <span className="font-medium text-[#000000]">{formatUgx(order.total)}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
 
-          {/* Tab 1: Shipping Details */}
+          {/* Tab: Shipping Details */}
           {activeTab === 'details' && (
             <div className="border border-neutral-200 rounded-xl p-4 bg-white space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
                 <span className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">
-                  Default Delivery Address
+                  Profile Details
                 </span>
                 <button
                   onClick={() => {
                     if (isEditing) handleSave();
                     else {
                       setEditedInfo({
-                        fullName: displayName,
-                        phone: customerInfo.phone,
-                        region: customerInfo.region,
-                        district: customerInfo.district,
-                        subCounty: customerInfo.subCounty,
-                        parish: customerInfo.parish,
-                        village: customerInfo.village,
-                        address: customerInfo.address
+                        fullName: profile?.fullName || customerInfo.fullName,
+                        phone: profile?.phone || customerInfo.phone,
+                        region: profile?.region || customerInfo.region,
+                        district: profile?.district || customerInfo.district,
+                        subCounty: profile?.subCounty || customerInfo.subCounty,
+                        parish: profile?.parish || customerInfo.parish,
+                        village: profile?.village || customerInfo.village,
+                        address: profile?.address || customerInfo.address,
                       });
                       setIsEditing(true);
                     }
@@ -285,36 +477,7 @@ export default function ProfilePage({
             </div>
           )}
 
-          {/* Tab 2: Order History */}
-          {activeTab === 'orders' && (
-            <div className="space-y-3 font-['Inter:Regular',_sans-serif]">
-              <div className="p-4 border border-neutral-200 rounded-xl bg-white space-y-2">
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="font-medium text-[#000000]">Order #MK-84920</span>
-                  <span className="text-[#426b1f] bg-[#426b1f]/10 px-2 py-0.5 rounded text-[11px] font-semibold">Active</span>
-                </div>
-                <p className="text-[12px] text-[#757575]">Placed Oct 2, 2026 • 3 items</p>
-                <div className="text-[13px] text-[#000000] pt-1 border-t border-neutral-100 flex justify-between">
-                  <span>Fresh Harvest Box (Ginger, Garlic, Peas)</span>
-                  <span className="font-medium">{formatUgx(45936)}</span>
-                </div>
-              </div>
-
-              <div className="p-4 border border-neutral-200 rounded-xl bg-white space-y-2 opacity-80">
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="font-medium text-[#000000]">Order #MK-81204</span>
-                  <span className="text-[#757575] bg-neutral-100 px-2 py-0.5 rounded text-[11px]">Delivered</span>
-                </div>
-                <p className="text-[12px] text-[#757575]">Delivered Sep 24, 2026 • 4 items</p>
-                <div className="text-[13px] text-[#000000] pt-1 border-t border-neutral-100 flex justify-between">
-                  <span>Sweet Onions &amp; Avocados</span>
-                  <span className="font-medium">{formatUgx(37303)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Tab 3: Dietary & Preferences */}
+          {/* Tab: Preferences */}
           {activeTab === 'preferences' && (
             <div className="border border-neutral-200 rounded-xl p-4 bg-white space-y-3 font-['Inter:Regular',_sans-serif] text-[14px]">
               <h4 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">
@@ -341,10 +504,10 @@ export default function ProfilePage({
           <div className="border border-[#426b1f]/20 bg-[#426b1f]/5 rounded-xl p-4 space-y-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#426b1f]">Your Impact</span>
             <p className="font-['Newsreader:Regular',_sans-serif] text-[16px] text-[#000000]">
-              14.2 lbs of regional organic produce purchased
+              {formatUgx(totalSpent)} of regional organic produce purchased
             </p>
             <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575]">
-              Saved an estimated 38 vehicle food-miles through local collective delivery.
+              {orders.length} order{orders.length !== 1 ? 's' : ''} placed • {activeOrders.length} active
             </p>
           </div>
         </div>

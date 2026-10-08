@@ -28,6 +28,7 @@ import AdminPage from './components/AdminPage';
 import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './lib/cartApi';
 import { fetchStock, applyStockDelta, type StockLevel } from './lib/stockApi';
 import { useCatalogue, type CatalogueProduct } from './lib/catalogue';
+import { saveCustomerPhone, clearCustomerPhone } from './lib/customerApi';
 
 // Enhanced product data with descriptions and locations
 /**
@@ -446,6 +447,9 @@ export default function App() {
 
   const handleProceedToPayment = (customerData: CustomerInfo) => {
     setCustomerInfo(customerData);
+    if (customerData.phone.trim()) {
+      saveCustomerPhone(customerData.phone.trim());
+    }
     setViewMode('payment');
   };
 
@@ -490,7 +494,7 @@ export default function App() {
   const handleShopFromOrderConfirmation = () => {
     setViewMode('list');
     setSelectedProduct(null);
-    // Reset customer info for new order
+    clearCustomerPhone();
     setCustomerInfo({
       fullName: '',
       phone: '',
