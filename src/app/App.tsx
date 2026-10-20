@@ -71,6 +71,7 @@ export default function App() {
     cartItems,
     cartId,
     cartCount,
+    favorites,
     addToCart,
     updateCartItemQuantity,
     toggleFavorite,
@@ -161,7 +162,7 @@ export default function App() {
                   element={
                     <ProductListPage
                       products={products}
-                      favorites={new Set()}
+                      favorites={favorites}
                       searchTerm={searchTerm}
                       sortOption={sortOption}
                       cartCount={cartCount}
