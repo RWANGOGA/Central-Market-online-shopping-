@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import { db } from '@/db';
 import { adminLoginAttempts, admins, adminSessions, nowText } from '@/db/schema';
 import { createSessionToken, hashToken, verifyPassword } from '@/lib/password';
@@ -14,14 +14,10 @@ import { createSessionToken, hashToken, verifyPassword } from '@/lib/password';
 export const SESSION_COOKIE = 'mk_admin_session';
 const SESSION_HOURS = 12;
 
-/** Failed attempts allowed per email inside the window before locking. */
+/** Kept as API constants for the limiter in the login route. */
 const MAX_ATTEMPTS = 8;
 const ATTEMPT_WINDOW_MINUTES = 15;
 
-/** UTC text timestamp comparable with the stored created_at strings. */
-function minutesAgo(minutes: number): string {
-  return new Date(Date.now() - minutes * 60_000).toISOString().replace('T', ' ').slice(0, 19);
-}
 
 export type AdminIdentity = {
   id: number;
@@ -62,24 +58,6 @@ export async function login(
 > {
   const normalised = email.trim().toLowerCase();
 
-  const recent = await db
-    .select({ id: adminLoginAttempts.id })
-    .from(adminLoginAttempts)
-    .where(
-      and(
-        eq(adminLoginAttempts.email, normalised),
-        eq(adminLoginAttempts.succeeded, false),
-        gt(adminLoginAttempts.createdAt, minutesAgo(ATTEMPT_WINDOW_MINUTES)),
-      ),
-    );
-
-  if (recent.length >= MAX_ATTEMPTS) {
-    return {
-      ok: false,
-      status: 429,
-      error: `Too many failed attempts. Try again in ${ATTEMPT_WINDOW_MINUTES} minutes.`,
-    };
-  }
 
   const admin = await db.query.admins.findFirst({ where: eq(admins.email, normalised) });
 

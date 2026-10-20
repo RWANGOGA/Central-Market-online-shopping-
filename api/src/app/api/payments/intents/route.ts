@@ -1,11 +1,14 @@
-import { timingSafeEqual } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { cartItems, carts, payments, products, nowText } from '@/db/schema';
+import { cartItems, payments, products, nowText } from '@/db/schema';
 import { PAYMENT_METHODS, detectMobileMoneyProvider, maskCard, luhnValid, approvalInstructions, article } from '@/lib/payments';
 import { createSessionToken, hashToken } from '@/lib/password';
 import { error, json } from '@/lib/http';
+import { requireCart } from '@/lib/cartOwnership';
+import { allow } from '@/lib/rateLimit';
+import { requireAdmin } from '@/lib/catalogue';
 
 /**
  * Mobile money fees in Uganda are charged by the sender, not the merchant, so
@@ -32,7 +35,7 @@ const createSchema = z.object({
 });
 
 function makeReference() {
-  return `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  return `PAY-${randomBytes(5).toString('hex').toUpperCase()}`;
 }
 
 export async function POST(request: Request) {
@@ -43,9 +46,12 @@ export async function POST(request: Request) {
 
   const { cartId, channel, provider, payerName, payerPhone, walletId, card } = parsed.data;
 
-  const cart = await db.query.carts.findFirst({ where: eq(carts.id, cartId) });
-  if (!cart) return error(`Cart ${cartId} not found`, 404);
-  if (cart.status !== 'active') return error(`Cart ${cartId} is already ${cart.status}`, 409);
+  const cart = await requireCart(request, cartId);
+  if (!cart) return error('Cart not found', 404);
+  if (cart.status !== 'active') return error('Cart is no longer active', 409);
+  if (!(await allow(`payment-intent-cart:${cartId}`, 10, 60 * 60))) {
+    return error('Too many payment attempts for this cart. Try again later.', 429);
+  }
 
   const items = await db
     .select({
@@ -146,9 +152,13 @@ export async function POST(request: Request) {
   return json(
     {
       data: {
-        ...payment,
-        // Returned once, at creation, and never again. It is what lets the
-        // client that opened this intent report the outcome, and nobody else.
+        reference: payment.reference,
+        status: payment.status,
+        amount: payment.amount,
+        currency: payment.currency,
+        channel: payment.channel,
+        provider: payment.provider,
+        // Returned once for the creating browser; never expose payer details or the stored hash.
         settlementToken,
         nextAction: { channel, provider, status, ...approvalInstructions(channel, provider) },
       },
@@ -186,7 +196,9 @@ export async function PATCH(request: Request) {
   const { reference, status, settlementToken, failureReason } = parsed.data;
 
   const payment = await db.query.payments.findFirst({ where: eq(payments.reference, reference) });
-  if (!payment) return error(`Payment ${reference} not found`, 404);
+  if (!payment || !payment.cartId) return error('Payment not found', 404);
+  const cart = await requireCart(request, payment.cartId);
+  if (!cart) return error('Payment not found', 404);
 
   // Compare in constant time and treat a missing hash the same as a mismatch,
   // so an already-settled intent cannot be told apart from a wrong token.

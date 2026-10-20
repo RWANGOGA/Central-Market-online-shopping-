@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { products } from '@/db/schema';
 import { error, json } from '@/lib/http';
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       ? parsedThreshold
       : LOW_STOCK_THRESHOLD;
 
-  const rows = await db.select().from(products).orderBy(products.name);
+  const rows = await db.select().from(products).where(eq(products.active, true)).orderBy(products.name);
 
   const described = rows.map((row) => {
     const state = stockState(row.stock, effectiveThreshold);

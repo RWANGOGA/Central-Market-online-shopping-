@@ -20,6 +20,7 @@ interface ConfirmationPageProps {
   onMenuClick: () => void;
   onUpdateQuantity: (productId: number, quantity: number) => void;
   onCompletePurchase: () => void;
+  errorMessage?: string | null;
 }
 
 export default function ConfirmationPage({
@@ -28,7 +29,8 @@ export default function ConfirmationPage({
   onBack,
   onMenuClick,
   onUpdateQuantity,
-  onCompletePurchase
+  onCompletePurchase,
+  errorMessage,
 }: ConfirmationPageProps) {
   const subtotal = cartItems.reduce((sum, item) => sum + (item.priceValue * item.quantity), 0);
   const shipping = 0;
@@ -66,6 +68,7 @@ export default function ConfirmationPage({
       
       {/* Product List and Order Summary */}
       <div className="absolute left-6 right-6 top-[247px] bottom-[124px] overflow-y-auto">
+        {errorMessage && <p role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errorMessage}</p>}
         {/* Products */}
         <div className="box-border content-stretch flex flex-col gap-4 items-start justify-start p-0 relative">
           {cartItems.map((item) => (

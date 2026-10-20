@@ -5,7 +5,7 @@ import { isValidUgandanPhone, normalizeUgandanPhone } from '../lib/uganda';
 
 interface SignupPageProps {
   onBack: () => void;
-  onSignup: (customer: { id: number; fullName: string; phone: string }) => void;
+  onSignup: () => void;
   onNavigateToLogin: () => void;
 }
 
@@ -37,8 +37,8 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       setLoading(false);
       return;
     }
@@ -57,9 +57,9 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
           fullName,
           phone,
           password,
-          region: region || 'Central Region',
-          district: district || 'Kampala',
-          address: address || 'Not specified',
+          region,
+          district: district || undefined,
+          address,
         }),
         credentials: 'include',
       });
@@ -70,7 +70,7 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
         return;
       }
 
-      onSignup(data.data);
+      onSignup();
     } catch {
       setError('Could not connect to the server');
     } finally {

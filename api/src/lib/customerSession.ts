@@ -1,27 +1,41 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import { db } from '@/db';
 import { customerSessions, customers } from '@/db/schema';
-import { hashToken } from './customerAuth';
+import { hashToken, readCustomerSessionToken } from './customerAuth';
 
 export async function getCurrentCustomer(request: Request): Promise<typeof customers.$inferSelect | null> {
-  const cookie = request.headers.get('cookie') || '';
-  const match = cookie.match(/mk_customer_session=([^;]+)/);
-  if (!match) return null;
+  const token = readCustomerSessionToken(request.headers.get('cookie'));
+  if (!token) return null;
 
-  const token = decodeURIComponent(match[1]);
   const tokenHash = hashToken(token);
-
   const session = await db.query.customerSessions.findFirst({
-    where: eq(customerSessions.tokenHash, tokenHash),
+    where: and(eq(customerSessions.tokenHash, tokenHash), gt(customerSessions.expiresAt, new Date().toISOString())),
   });
 
-  if (!session || new Date(session.expiresAt) < new Date()) {
+  if (!session) {
+    await db.delete(customerSessions).where(and(
+      eq(customerSessions.tokenHash, tokenHash),
+      lt(customerSessions.expiresAt, new Date().toISOString()),
+    ));
     return null;
   }
 
   const customer = await db.query.customers.findFirst({
-    where: eq(customers.id, session.customerId),
+    where: and(eq(customers.id, session.customerId), eq(customers.active, true)),
   });
+  if (!customer) {
+    await db.delete(customerSessions).where(eq(customerSessions.id, session.id));
+    return null;
+  }
 
-  return customer ?? null;
+  return customer;
+}
+
+/** Removes any stale customer sessions during login or an authenticated request. */
+export async function pruneExpiredCustomerSessions(): Promise<void> {
+  await db.delete(customerSessions).where(lt(customerSessions.expiresAt, new Date().toISOString()));
+}
+
+export async function revokeCustomerSessions(customerId: number): Promise<void> {
+  await db.delete(customerSessions).where(eq(customerSessions.customerId, customerId));
 }

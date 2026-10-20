@@ -6,17 +6,18 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: grocery-api
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=file:./local.db
+      - DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL to a PostgreSQL connection URL}
+      - TRUST_PROXY=true
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - ADMIN_NAME=${ADMIN_NAME:-}
     volumes:
-      - api-data:/app
+      - api-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
