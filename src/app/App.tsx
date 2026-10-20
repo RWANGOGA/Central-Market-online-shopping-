@@ -153,9 +153,9 @@ export default function App() {
     <BrowserRouter>
       <CartProvider>
         <AuthProvider>
-          <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-            {/* iPhone 16 Container */}
-            <div className="w-[393px] h-[852px] bg-[#ffffff] relative overflow-hidden rounded-[40px] shadow-2xl border-8 border-black">
+          <div className="min-h-dvh bg-[#f7f7f5] p-2 sm:p-4">
+            {/* Responsive shop shell: full width on small screens, bezel frame on md+. */}
+            <div className="max-w-[430px] mx-auto bg-[#ffffff] relative overflow-hidden rounded-[40px] shadow-2xl md:border-8 md:border-black md:rounded-[52px]">
               <Routes>
                 <Route
                   path="/"
