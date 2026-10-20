@@ -9,3 +9,6 @@ local.db
 local.db-journal
 local.db-wal
 local.db-shm
+# Local secrets and environment overrides
+.env.local
+.env*.local
