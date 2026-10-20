@@ -13,7 +13,10 @@ export type ActivityAction =
   | 'inventory.adjust'
   | 'purchase_order.create'
   | 'purchase_order.receive'
-  | 'supplier.create';
+  | 'purchase_order.cancel'
+  | 'supplier.create'
+  | 'customer.deactivate'
+  | 'admin.password_change';
 
 export type ActivityInput = {
   action: ActivityAction;

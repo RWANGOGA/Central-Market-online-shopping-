@@ -103,6 +103,17 @@ const DUMMY_HASH =
   '0000000000000000000000000000000000000000000000000000000000000000' +
   '0000000000000000000000000000000000000000000000000000000000000000';
 
+/** Authenticate and require one of the given roles. Returns null when not signed in or not permitted. */
+export async function requireRole(
+  request: Request,
+  roles: ('owner' | 'manager')[],
+): Promise<AdminIdentity | null> {
+  const admin = await authenticate(request);
+  if (!admin) return null;
+  if (!roles.includes(admin.role)) return null;
+  return admin;
+}
+
 export async function authenticate(request: Request): Promise<AdminIdentity | null> {
   const token = tokenFromRequest(request);
   if (!token) return null;

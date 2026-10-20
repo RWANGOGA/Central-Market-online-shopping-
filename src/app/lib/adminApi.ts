@@ -32,6 +32,9 @@ export type AdminProduct = {
   images: string[];
   active: boolean;
   createdAt: string;
+  lowStockThreshold?: number | null;
+  reorderQuantity?: number | null;
+  supplierId?: number | null;
 };
 
 export type ProductDraft = {
@@ -131,3 +134,393 @@ export function fileToDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+/* ---------- Inventory ---------- */
+
+export type StockMovementRow = {
+  id: number;
+  productId: number;
+  productName: string | null;
+  productSlug: string | null;
+  unit: string | null;
+  delta: number;
+  reason: string;
+  reference: string | null;
+  note: string | null;
+  actorLabel: string | null;
+  actorEmail: string | null;
+  createdAt: string;
+};
+
+export type InventoryMovementsResult = {
+  data: StockMovementRow[];
+  meta: {
+    total: number;
+    net: number;
+    limit: number;
+    offset: number;
+    returned: number;
+    reasons: string[];
+  };
+};
+
+export type InventoryAdjustment = {
+  delta: number;
+  reason: 'adjustment' | 'waste' | 'return' | 'correction' | 'delivery';
+  note?: string;
+};
+
+export type AdjustmentResult = {
+  id: number;
+  slug: string;
+  name: string;
+  stock: number;
+  previous: number;
+  delta: number;
+  unit: string;
+  state: string;
+  remaining: string;
+  threshold: number;
+  lowStockThreshold: number | null;
+  reorderQuantity: number | null;
+  supplierId: number | null;
+};
+
+export type LowStockItem = {
+  id: number;
+  slug: string;
+  name: string;
+  stock: number;
+  unit: string;
+  price: string;
+  threshold: number;
+  reorderQuantity: number | null;
+  ratio: number;
+};
+
+export type ReconciliationResult = {
+  data: {
+    lowStock: LowStockItem[];
+    reconciliation: { id: number; name: string; slug: string; stock_column: number; ledger_total: number; drift: number }[];
+  };
+  meta: {
+    lowStockCount: number;
+    unreconciledCount: number;
+    healthy: boolean;
+  };
+};
+
+export async function listInventoryMovements(
+  filters?: {
+    productId?: number;
+    reason?: string;
+    reference?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<Result<InventoryMovementsResult>> {
+  const params = new URLSearchParams();
+  if (filters?.productId) params.set('productId', String(filters.productId));
+  if (filters?.reason) params.set('reason', filters.reason);
+  if (filters?.reference) params.set('reference', filters.reference);
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+  if (filters?.offset !== undefined) params.set('offset', String(filters.offset));
+  const qs = params.toString();
+  return call<InventoryMovementsResult>(`/inventory/movements${qs ? `?${qs}` : ''}`);
+}
+
+export async function adjustInventory(
+  id: number | string,
+  adjustment: InventoryAdjustment,
+): Promise<Result<AdjustmentResult>> {
+  return call<AdjustmentResult>(`/inventory/products/${encodeURIComponent(String(id))}`, {
+    method: 'PATCH',
+    body: JSON.stringify(adjustment),
+  });
+}
+
+export async function reconciliation(): Promise<Result<ReconciliationResult>> {
+  return call<ReconciliationResult>('/inventory/reconciliation');
+}
+
+/* ---------- Purchase Orders ---------- */
+
+export type PurchaseOrderRow = {
+  id: number;
+  reference: string;
+  supplierId: number;
+  status: 'draft' | 'sent' | 'received' | 'cancelled';
+  expectedAt: string | null;
+  receivedAt: string | null;
+  note: string | null;
+  createdByAdminId: number | null;
+  createdAt: string;
+};
+
+export type PurchaseOrderLine = {
+  id: number;
+  purchaseOrderId: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  receivedQuantity: number | null;
+};
+
+export type PurchaseOrderDetail = PurchaseOrderRow & {
+  items: PurchaseOrderLine[];
+};
+
+export type PurchaseOrderListResult = {
+  data: PurchaseOrderRow[];
+  meta: { total: number };
+};
+
+export type CreatePurchaseOrderInput = {
+  supplierId: number;
+  expectedAt?: string;
+  note?: string;
+  items: { productId: number; quantity: number; unitPrice: number }[];
+};
+
+export async function listPurchaseOrders(
+  filters?: { status?: string; id?: number },
+): Promise<Result<PurchaseOrderListResult | { data: PurchaseOrderDetail; items: PurchaseOrderLine[] }>> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.id !== undefined) params.set('id', String(filters.id));
+  const qs = params.toString();
+  return call<PurchaseOrderListResult | { data: PurchaseOrderDetail; items: PurchaseOrderLine[] }>(
+    `/purchase-orders${qs ? `?${qs}` : ''}`,
+  );
+}
+
+export async function createPurchaseOrder(
+  input: CreatePurchaseOrderInput,
+): Promise<Result<{ reference: string; status: string }>> {
+  return call<{ reference: string; status: string }>('/purchase-orders', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function cancelPurchaseOrder(id: number | string): Promise<Result<{ reference: string; status: string }>> {
+  return call<{ reference: string; status: string }>(`/purchase-orders/${encodeURIComponent(String(id))}/cancel`, {
+    method: 'PATCH',
+  });
+}
+
+export async function receivePurchaseOrder(id: number | string): Promise<Result<unknown>> {
+  return call<unknown>(`/purchase-orders/${encodeURIComponent(String(id))}/receive`, {
+    method: 'POST',
+  });
+}
+
+/* ---------- Suppliers ---------- */
+
+export type SupplierRow = {
+  id: number;
+  name: string;
+  contactName: string | null;
+  phone: string | null;
+  district: string | null;
+  region: string | null;
+  active: boolean;
+  createdAt: string;
+  productCount?: number;
+};
+
+export type SupplierListResult = {
+  data: SupplierRow[];
+  meta: { total: number };
+};
+
+export type CreateSupplierInput = {
+  name: string;
+  contactName?: string;
+  phone?: string;
+  district?: string;
+  region?: string;
+};
+
+export async function listSuppliers(): Promise<Result<SupplierListResult>> {
+  return call<SupplierListResult>('/suppliers');
+}
+
+export async function createSupplier(input: CreateSupplierInput): Promise<Result<SupplierRow>> {
+  return call<SupplierRow>('/suppliers', { method: 'POST', body: JSON.stringify(input) });
+}
+
+/* ---------- Analytics ---------- */
+
+export type SalesTrendPoint = {
+  bucket: string;
+  orders: number;
+  revenue: number;
+  units: number;
+};
+
+export type ProductPerformanceRow = {
+  productId: number;
+  name: string;
+  unit: string;
+  orders: number;
+  units: number;
+  revenue: number;
+};
+
+export type RegionalDemandRow = {
+  region: string;
+  district: string | null;
+  orders: number;
+  revenue: number;
+  units: number;
+};
+
+export type ForecastResult = {
+  trailing: {
+    revenue7d: number;
+    revenue30d: number;
+    dailyAverage7d: number;
+    dailyAverage30d: number;
+  };
+  inventory: {
+    productId: number;
+    name: string;
+    unit: string;
+    stock: number;
+    threshold: number;
+    sold30d: number;
+    dailyAverage: number;
+    daysOfCover: number | null;
+  }[];
+};
+
+export async function listSalesTrend(
+  filters?: { from?: string; to?: string; bucket?: 'day' | 'week' | 'month'; limit?: number },
+): Promise<Result<SalesTrendPoint[]>> {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  if (filters?.bucket) params.set('bucket', filters.bucket);
+  if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return call<SalesTrendPoint[]>(`/analytics/sales${qs ? `?${qs}` : ''}`);
+}
+
+export async function listProductPerformance(
+  filters?: { from?: string; to?: string; limit?: number },
+): Promise<Result<ProductPerformanceRow[]>> {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return call<ProductPerformanceRow[]>(`/analytics/products${qs ? `?${qs}` : ''}`);
+}
+
+export async function listRegionalDemand(
+  filters?: { from?: string; to?: string },
+): Promise<Result<RegionalDemandRow[]>> {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  const qs = params.toString();
+  return call<RegionalDemandRow[]>(`/analytics/regions${qs ? `?${qs}` : ''}`);
+}
+
+export async function getForecast(): Promise<Result<ForecastResult>> {
+  return call<ForecastResult>('/analytics/forecast');
+}
+
+/* ---------- Activity Log ---------- */
+
+export type ActivityLogRow = {
+  id: number;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  adminEmail: string | null;
+  createdAt: string;
+};
+
+export type ActivityLogResult = {
+  data: ActivityLogRow[];
+  meta: { total: number; adminId?: number; action?: string; entity?: string; from?: string; to?: string; limit: number; offset: number };
+};
+
+export async function listActivityLog(
+  filters?: {
+    adminId?: number;
+    action?: string;
+    entity?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<Result<ActivityLogResult>> {
+  const params = new URLSearchParams();
+  if (filters?.adminId !== undefined) params.set('adminId', String(filters.adminId));
+  if (filters?.action) params.set('action', filters.action);
+  if (filters?.entity) params.set('entity', filters.entity);
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+  if (filters?.offset !== undefined) params.set('offset', String(filters.offset));
+  const qs = params.toString();
+  return call<ActivityLogResult>(`/analytics/activity${qs ? `?${qs}` : ''}`);
+}
+
+/* ---------- Customers ---------- */
+
+export type CustomerRow = {
+  id: number;
+  fullName: string;
+  phone: string;
+  email: string | null;
+  region: string;
+  district: string | null;
+  active: boolean;
+  createdAt: string;
+};
+
+export type CustomerListResult = {
+  data: CustomerRow[];
+  meta: { total: number; limit: number; offset: number; returned: number };
+};
+
+export async function listCustomers(
+  filters?: { q?: string; active?: boolean; limit?: number; offset?: number },
+): Promise<Result<CustomerListResult>> {
+  const params = new URLSearchParams();
+  if (filters?.q) params.set('q', filters.q);
+  if (filters?.active !== undefined) params.set('active', String(filters.active));
+  if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+  if (filters?.offset !== undefined) params.set('offset', String(filters.offset));
+  const qs = params.toString();
+  return call<CustomerListResult>(`/customers${qs ? `?${qs}` : ''}`);
+}
+
+export async function deactivateCustomer(id: number | string): Promise<Result<{ id: number; fullName: string; phone: string; active: boolean }>> {
+  return call<{ id: number; fullName: string; phone: string; active: boolean }>(`/customers/${encodeURIComponent(String(id))}/deactivate`, {
+    method: 'PATCH',
+  });
+}
+
+/* ---------- Admin password ---------- */
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<Result<{ id: number; email: string; name: string; role: string }>> {
+  return call<{ id: number; email: string; name: string; role: string }>('/password', {
+    method: 'PATCH',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
