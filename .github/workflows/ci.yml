@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main, fix/phase7-infra]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci --prefer-offline --no-audit --maxsockets 3
+        workdir: api
+      - run: npm run typecheck
+        workdir: api
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci --prefer-offline --no-audit --maxsockets 3
+        workdir: api
+      - run: npm test
+        workdir: api
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci --prefer-offline --no-audit --maxsockets 3
+        workdir: api
+      - run: npm audit --audit-level=critical
+        workdir: api
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci --prefer-offline --no-audit --maxsockets 3
+        workdir: api
+      - run: npm run build
+        workdir: api
+      - run: npm ci --prefer-offline --no-audit --maxsockets 3
+      - run: npm run build
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t grocery-api:ci -f Dockerfile.api .
+      - run: docker build -t grocery-frontend:ci -f Dockerfile.frontend .
+
+# Secret scanning: enable "Secret scanning" and "Push protection" under
+# Settings > Code security and analysis on GitHub. Dependabot version updates
+# are configured in .github/dependabot.yml.

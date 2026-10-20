@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: grocery-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=mu_katale
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mu_katale"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -8,10 +24,14 @@ services:
     container_name: grocery-api
     expose:
       - "3000"
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL to a PostgreSQL connection URL}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/mu_katale}
+      - UPLOAD_DIR=/app/data/uploads
       - TRUST_PROXY=true
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
@@ -40,3 +60,4 @@ services:
 
 volumes:
   api-data:
+  db-data:
