@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db, queryRows } from '@/db';
-import { orderItems, orders, products, stockMovements } from '@/db/schema';
+import { customers, orderItems, orders, products, stockMovements } from '@/db/schema';
 
 export type Bucket = 'day' | 'week' | 'month';
 
@@ -89,6 +89,111 @@ export async function productPerformance(filters: { from?: string; to?: string; 
     units: Number(row.units),
     revenue: Number(row.revenue),
   }));
+}
+
+/** Every order in the window, cancelled included. Pipeline counts need those. */
+function orderWindow(filters: { from?: string; to?: string }) {
+  const parts = [sql`1 = 1`];
+  if (filters.from) parts.push(sql`${orders.createdAt} >= ${filters.from}`);
+  if (filters.to) parts.push(sql`${orders.createdAt} <= ${filters.to}`);
+  return sql.join(parts, sql` AND `);
+}
+
+/**
+ * One payload for the staff dashboard: money, pipeline, payment mix, promo
+ * redemptions, stock risk and signups, all over the same window.
+ */
+export async function overview(filters: { from?: string; to?: string }) {
+  const [totalsRow] = await db
+    .select({
+      orders: sql<number>`count(*)`,
+      revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+      discounts: sql<number>`coalesce(sum(${orders.discount}), 0)`,
+    })
+    .from(orders)
+    .where(dateRange(filters));
+
+  const [unitsRow] = await db
+    .select({ units: sql<number>`coalesce(sum(${orderItems.quantity}), 0)` })
+    .from(orderItems)
+    .innerJoin(orders, sql`${orders.id} = ${orderItems.orderId}`)
+    .where(dateRange(filters));
+
+  const statusRows = await db
+    .select({ status: orders.status, count: sql<number>`count(*)` })
+    .from(orders)
+    .where(orderWindow(filters))
+    .groupBy(orders.status);
+
+  const paymentRows = await queryRows<{ status: string; count: string; amount: string }>(sql`
+    SELECT p.status AS status, count(*) AS count, coalesce(sum(p.amount), 0) AS amount
+    FROM payments p
+    INNER JOIN ${orders} ON ${orders.id} = p.order_id
+    WHERE ${orderWindow(filters)}
+    GROUP BY 1
+    ORDER BY 2 DESC
+  `);
+
+  const promoRows = await db
+    .select({
+      code: orders.promoCode,
+      uses: sql<number>`count(*)`,
+      discount: sql<number>`coalesce(sum(${orders.discount}), 0)`,
+    })
+    .from(orders)
+    .where(sql`${orders.promoCode} IS NOT NULL AND ${dateRange(filters)}`)
+    .groupBy(orders.promoCode)
+    .orderBy(sql`count(*) DESC`)
+    .limit(5);
+
+  const signupParts = [sql`1 = 1`];
+  if (filters.from) signupParts.push(sql`${customers.createdAt} >= ${filters.from}`);
+  if (filters.to) signupParts.push(sql`${customers.createdAt} <= ${filters.to}`);
+  const [signupsRow] = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(customers)
+    .where(sql.join(signupParts, sql` AND `));
+
+  const stockRows = await db
+    .select({
+      stock: products.stock,
+      threshold: sql<number>`coalesce(${products.lowStockThreshold}, 10)`,
+    })
+    .from(products)
+    .where(eq(products.active, true));
+
+  const ordersCount = Number(totalsRow?.orders ?? 0);
+  const revenue = Number(totalsRow?.revenue ?? 0);
+
+  return {
+    totals: {
+      orders: ordersCount,
+      units: Number(unitsRow?.units ?? 0),
+      revenue,
+      discounts: Number(totalsRow?.discounts ?? 0),
+      averageOrderValue: ordersCount > 0 ? Math.round(revenue / ordersCount) : 0,
+    },
+    status: statusRows.map((row) => ({
+      status: String(row.status),
+      count: Number(row.count),
+    })),
+    payments: paymentRows.map((row) => ({
+      status: String(row.status),
+      count: Number(row.count),
+      amount: Number(row.amount),
+    })),
+    promos: promoRows.map((row) => ({
+      code: String(row.code),
+      uses: Number(row.uses),
+      discount: Number(row.discount),
+    })),
+    inventory: {
+      activeProducts: stockRows.length,
+      lowStock: stockRows.filter((row) => Number(row.stock) > 0 && Number(row.stock) <= Number(row.threshold)).length,
+      outOfStock: stockRows.filter((row) => Number(row.stock) <= 0).length,
+    },
+    newCustomers: Number(signupsRow?.total ?? 0),
+  };
 }
 
 export async function regionalDemand(filters: { from?: string; to?: string }) {

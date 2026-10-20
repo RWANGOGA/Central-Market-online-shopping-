@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   adjustInventory,
+  analyticsExportUrl,
   cancelPurchaseOrder,
   changePassword,
   createProduct,
@@ -11,6 +12,7 @@ import {
   deactivateCustomer,
   fileToDataUrl,
   getForecast,
+  getAnalyticsOverview,
   listActivityLog,
   listAdminProducts,
   listCustomers,
@@ -29,6 +31,7 @@ import {
   type AdminIdentity,
   type AdminProduct,
   type AdminPromo,
+  type AnalyticsOverview,
   type CustomerRow,
   type ForecastResult,
   type ProductDraft,
@@ -125,17 +128,17 @@ function StaffShell({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const flash = (message: string) => {
+  const flash = useCallback((message: string) => {
     setNotice(message);
     setError(null);
     window.setTimeout(() => setNotice(null), 4000);
-  };
+  }, []);
 
-  const fail = (message: string) => {
+  const fail = useCallback((message: string) => {
     setError(message);
     setNotice(null);
     window.setTimeout(() => setError(null), 5000);
-  };
+  }, []);
 
   const tabs: { value: Tab; label: string; disabled?: boolean }[] = [
     { value: 'catalogue', label: 'Catalogue' },
@@ -184,7 +187,11 @@ function StaffShell({
             <button
               key={item.value}
               disabled={item.disabled}
-              onClick={() => setTab(item.value)}
+              onClick={(event) => {
+                setTab(item.value);
+                // The strip is wider than the phone: keep the chosen pill visible.
+                event.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest' });
+              }}
               className={`whitespace-nowrap px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',_sans-serif] ${
                 tab === item.value
                   ? 'bg-[#426b1f] text-white'
@@ -1165,48 +1172,282 @@ function PromotionsPanel({ flash, fail }: { flash: (m: string) => void; fail: (m
 
 /* ---------------- Analytics ---------------- */
 
+const RANGES = [
+  { days: 7, label: '7 days' },
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
+] as const;
+
+const PIPELINE: { value: string; label: string; color: string }[] = [
+  { value: 'pending', label: 'Pending', color: 'bg-amber-400' },
+  { value: 'processing', label: 'Processing', color: 'bg-blue-400' },
+  { value: 'shipped', label: 'Shipped', color: 'bg-indigo-400' },
+  { value: 'delivered', label: 'Delivered', color: 'bg-[#426b1f]' },
+  { value: 'cancelled', label: 'Cancelled', color: 'bg-red-400' },
+];
+
+const PAYMENT_LABELS: Record<string, string> = {
+  succeeded: 'Paid online',
+  cod: 'Cash on delivery',
+  pending: 'Awaiting payment',
+  awaiting_approval: 'Awaiting approval',
+  processing: 'Processing',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+
+/** Midnight `days` ago, in the server's text timestamp format. */
+function daysAgo(days: number) {
+  const date = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000);
+  return date.toISOString().slice(0, 10);
+}
+
 function AnalyticsPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
-  const [trend, setTrend] = useState<any[]>([]);
-  const [forecast, setForecast] = useState<any>(null);
+  const [rangeDays, setRangeDays] = useState(30);
+  const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [trend, setTrend] = useState<SalesTrendPoint[]>([]);
+  const [topProducts, setTopProducts] = useState<ProductPerformanceRow[]>([]);
+  const [regions, setRegions] = useState<RegionalDemandRow[]>([]);
+  const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    const [t, f] = await Promise.all([
-      listSalesTrend({ bucket: 'day', limit: 14 }),
+  const from = useMemo(() => daysAgo(rangeDays), [rangeDays]);
+  const bucket = rangeDays > 31 ? 'week' : 'day';
+
+  const load = useCallback(async (announce = false) => {
+    setLoading(true);
+    const [o, t, p, r, f] = await Promise.all([
+      getAnalyticsOverview({ from }),
+      listSalesTrend({ from, bucket, limit: rangeDays > 31 ? 14 : rangeDays }),
+      listProductPerformance({ from, limit: 6 }),
+      listRegionalDemand({ from }),
       getForecast(),
     ]);
-    if (!t || !t.ok) return fail(t?.error ?? 'Could not reach the service.');
-    setTrend(t.data);
-    if (f && f.ok) setForecast(f.data);
     setLoading(false);
-  }, [fail]);
+    if (!o) return fail('Could not reach the service.');
+    if (!o.ok) return fail(o.error);
+    setOverview(o.data);
+    setTrend(t && t.ok ? t.data : []);
+    setTopProducts(p && p.ok ? p.data : []);
+    setRegions(r && r.ok ? r.data : []);
+    if (f && f.ok) setForecast(f.data);
+    if (announce) flash('Dashboard refreshed.');
+  }, [bucket, fail, flash, from, rangeDays]);
 
   useEffect(() => { load(); }, [load]);
 
+  const totals = overview?.totals;
+  const chart = [...trend].reverse();
+  const peak = Math.max(...chart.map((point) => point.revenue), 1);
+  const pipelineTotal = (overview?.status ?? []).reduce((sum, row) => sum + row.count, 0);
+  const productPeak = Math.max(...topProducts.map((row) => row.revenue), 1);
+  const restock = (forecast?.inventory ?? [])
+    .filter((row) => row.daysOfCover !== null && row.daysOfCover <= 10)
+    .sort((a, b) => (a.daysOfCover ?? 0) - (b.daysOfCover ?? 0))
+    .slice(0, 5);
+
   return (
     <div className="space-y-3">
-      <p className="text-[14px] font-['Inter:Medium',_sans-serif] text-[#000000]">Sales trend (14 days)</p>
-      {loading ? (
-        <p className="text-[13px] text-[#757575] py-4 text-center">Loading…</p>
-      ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {trend.map((p) => (
-            <div key={p.bucket} className="rounded-xl border border-neutral-200 bg-white p-3">
-              <p className="text-[12px] text-[#757575]">{p.bucket}</p>
-              <p className="text-[16px] font-['Inter:Medium',_sans-serif]">{formatUgx(p.revenue)}</p>
-              <p className="text-[12px] text-[#757575]">{p.orders} orders · {p.units} units</p>
-            </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-1">
+          {RANGES.map((range) => (
+            <button
+              key={range.days}
+              onClick={() => setRangeDays(range.days)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-['Inter:Medium',_sans-serif] ${
+                rangeDays === range.days ? 'bg-[#426b1f] text-white' : 'bg-neutral-100 text-[#000000]'
+              }`}
+            >
+              {range.label}
+            </button>
           ))}
         </div>
+        <button onClick={() => load(true)} className="text-[11px] text-[#426b1f]">
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-[13px] text-[#757575] py-6 text-center">Crunching the last {rangeDays} days…</p>
+      ) : !overview || !totals ? (
+        <p className="text-[13px] text-[#757575] py-6 text-center">No analytics yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <Kpi label="Revenue" value={formatUgx(totals.revenue)} note={`${totals.orders} paid orders`} />
+            <Kpi label="Average basket" value={formatUgx(totals.averageOrderValue)} note={`${totals.units} units sold`} />
+            <Kpi label="Discount given" value={formatUgx(totals.discounts)} note={`${overview.promos.length} codes used`} />
+            <Kpi
+              label="New customers"
+              value={String(overview.newCustomers)}
+              note={`${overview.inventory.lowStock} low · ${overview.inventory.outOfStock} out of stock`}
+            />
+          </div>
+
+          <Section title={`Revenue per ${bucket}`}>
+            {chart.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No paid orders in this window.</p>
+            ) : (
+              <>
+                <div className="flex h-24 items-end justify-start gap-[2px]">
+                  {chart.map((point) => (
+                    <div
+                      key={point.bucket}
+                      title={`${point.bucket}: ${formatUgx(point.revenue)} · ${point.orders} orders`}
+                      className="max-w-[18px] flex-1 rounded-t bg-[#426b1f]/80"
+                      style={{ height: `${Math.max(4, (point.revenue / peak) * 96)}px` }}
+                    />
+                  ))}
+                </div>
+                <div className="mt-1 flex justify-between text-[10px] text-[#757575]">
+                  <span>{chart[0]?.bucket}</span>
+                  <span>{chart[chart.length - 1]?.bucket}</span>
+                </div>
+              </>
+            )}
+          </Section>
+
+          <Section title="Order pipeline">
+            {pipelineTotal === 0 ? (
+              <p className="text-[12px] text-[#757575]">No orders in this window.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {PIPELINE.map((stage) => {
+                  const count = overview.status.find((row) => row.status === stage.value)?.count ?? 0;
+                  return (
+                    <div key={stage.value} className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${stage.color}`} />
+                      <span className="w-[76px] text-[12px] text-[#000000]">{stage.label}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
+                        <div className={`h-full ${stage.color}`} style={{ width: `${(count / pipelineTotal) * 100}%` }} />
+                      </div>
+                      <span className="w-6 text-right text-[12px] text-[#000000]">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+
+          <Section title="Payment mix">
+            {overview.payments.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No payments in this window.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {overview.payments.map((row) => (
+                  <div key={row.status} className="flex justify-between gap-2">
+                    <dt className="text-[#757575]">{PAYMENT_LABELS[row.status] ?? row.status}</dt>
+                    <dd className="text-[#000000]">{row.count} · {formatUgx(row.amount)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <Section title="Top products">
+            {topProducts.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">Nothing sold in this window.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {topProducts.map((product) => (
+                  <div key={product.productId}>
+                    <div className="flex justify-between gap-2 text-[12px]">
+                      <span className="truncate text-[#000000]">{product.name}</span>
+                      <span className="shrink-0 text-[#757575]">{product.units} {product.unit}</span>
+                    </div>
+                    <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-neutral-100">
+                      <div
+                        className="h-full bg-[#426b1f]"
+                        style={{ width: `${(product.revenue / productPeak) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+
+          <Section title="Regional demand">
+            {regions.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No deliveries in this window.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {regions.slice(0, 5).map((row) => (
+                  <div key={`${row.region}-${row.district ?? ''}`} className="flex justify-between gap-2">
+                    <dt className="truncate text-[#757575]">{row.region}{row.district ? ` · ${row.district}` : ''}</dt>
+                    <dd className="shrink-0 text-[#000000]">
+                      {row.orders} order{row.orders === 1 ? '' : 's'} · {formatUgx(row.revenue)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <Section title="Restock soon">
+            {restock.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">Every product covers more than 10 days.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {restock.map((row) => (
+                  <div key={row.productId} className="flex justify-between gap-2">
+                    <dt className="truncate text-[#757575]">{row.name}</dt>
+                    <dd className="shrink-0 text-[#000000]">
+                      {row.daysOfCover} days · {row.stock} {row.unit} left
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <Section title="Promo redemptions">
+            {overview.promos.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No codes redeemed in this window.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {overview.promos.map((promo) => (
+                  <div key={promo.code} className="flex justify-between gap-2">
+                    <dt className="text-[#000000]">{promo.code}</dt>
+                    <dd className="text-[#757575]">{promo.uses} uses · {formatUgx(promo.discount)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {(['sales', 'products', 'regions'] as const).map((source) => (
+              <a
+                key={source}
+                href={analyticsExportUrl(source, { from })}
+                className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[11px] text-[#426b1f]"
+              >
+                Download {source}.csv
+              </a>
+            ))}
+          </div>
+        </>
       )}
-      {forecast && (
-        <div className="rounded-xl border border-neutral-200 bg-white p-3">
-          <p className="text-[13px] text-[#757575]">Revenue last 7 days</p>
-          <p className="text-[16px] font-['Inter:Medium',_sans-serif]">{formatUgx(forecast.trailing.revenue7d)}</p>
-          <p className="text-[13px] text-[#757575]">Daily average (30d)</p>
-          <p className="text-[16px] font-['Inter:Medium',_sans-serif]">{formatUgx(forecast.trailing.dailyAverage30d)}</p>
-        </div>
-      )}
+    </div>
+  );
+}
+
+function Kpi({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+      <p className="text-[11px] text-[#757575]">{label}</p>
+      <p className="text-[16px] font-['Inter:Medium',_sans-serif] text-[#000000]">{value}</p>
+      <p className="text-[10px] text-[#757575]">{note}</p>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+      <p className="mb-2 text-[12px] font-['Inter:Medium',_sans-serif] text-[#000000]">{title}</p>
+      {children}
     </div>
   );
 }

@@ -402,6 +402,43 @@ export async function setPromoActive(id: number, active: boolean): Promise<Resul
 
 /* ---------- Analytics ---------- */
 
+export type AnalyticsOverview = {
+  totals: {
+    orders: number;
+    units: number;
+    revenue: number;
+    discounts: number;
+    averageOrderValue: number;
+  };
+  status: { status: string; count: number }[];
+  payments: { status: string; count: number; amount: number }[];
+  promos: { code: string; uses: number; discount: number }[];
+  inventory: { activeProducts: number; lowStock: number; outOfStock: number };
+  newCustomers: number;
+};
+
+export type AnalyticsRange = { from?: string; to?: string };
+
+export async function getAnalyticsOverview(
+  filters?: AnalyticsRange,
+): Promise<Result<AnalyticsOverview>> {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  const qs = params.toString();
+  return call<AnalyticsOverview>(`/analytics/overview${qs ? `?${qs}` : ''}`);
+}
+
+export type ExportSource = 'sales' | 'products' | 'regions' | 'activity';
+
+/** A plain link the browser downloads with the session cookie attached. */
+export function analyticsExportUrl(source: ExportSource, filters?: AnalyticsRange): string {
+  const params = new URLSearchParams({ source });
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  return `${BASE}/analytics/export?${params.toString()}`;
+}
+
 export type SalesTrendPoint = {
   bucket: string;
   orders: number;
