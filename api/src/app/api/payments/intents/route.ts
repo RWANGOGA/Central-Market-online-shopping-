@@ -20,7 +20,7 @@ const FREE_DELIVERY_THRESHOLD_UGX = 100000;
 
 const createSchema = z.object({
   cartId: z.number().int().positive(),
-  channel: z.enum(['mobile_money', 'card', 'wallet']),
+  channel: z.enum(['mobile_money', 'card', 'wallet', 'cod']),
   provider: z.string().min(1),
   payerName: z.string().min(1).optional(),
   payerPhone: z.string().optional(),

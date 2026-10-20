@@ -8,7 +8,7 @@ import { json } from '@/lib/http';
  * rather than single providers, so they carry a scheme instead.
  */
 
-export type Channel = 'mobile_money' | 'card' | 'wallet';
+export type Channel = 'mobile_money' | 'card' | 'wallet' | 'cod';
 
 export const PAYMENT_METHODS = {
   mobile_money: [
@@ -53,6 +53,14 @@ export const PAYMENT_METHODS = {
       label: 'Mastercard',
       schemes: ['mastercard'],
       instructions: 'A one-time authorisation is placed on your card and released once the rider hands over.',
+    },
+  ],
+  cod: [
+    {
+      id: 'cod',
+      provider: 'Cash on Delivery',
+      label: 'Cash on Delivery',
+      instructions: 'Pay the rider on delivery.',
     },
   ],
   wallet: [
