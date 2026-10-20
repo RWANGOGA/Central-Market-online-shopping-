@@ -194,7 +194,7 @@ export const admins = pgTable('admins', {
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
-  role: text('role', { enum: ['owner', 'manager'] }).notNull().default('manager'),
+  role: text('role', { enum: ['owner', 'manager', 'staff'] }).notNull().default('manager'),
   active: boolean('active').notNull().default(true),
   createdAt: text('created_at')
     .notNull()

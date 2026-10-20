@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { admins, adminSessions } from '@/db/schema';
 import { hashPassword, verifyPassword } from '@/lib/password';
-import { clearedCookie, requireRole } from '@/lib/adminAuth';
+import { clearedCookie, guardAdmin } from '@/lib/adminAuth';
 import { error, json } from '@/lib/http';
 import { recordActivity } from '@/lib/activity';
 
@@ -13,8 +13,11 @@ const passwordSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const admin = await requireRole(request, ['owner', 'manager']);
-  if (!admin) return error('Not signed in', 401);
+  // Every role may change its own password; this is how a shop assistant takes
+  // ownership of the temporary one an owner handed over.
+  const guard = await guardAdmin(request);
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = passwordSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);

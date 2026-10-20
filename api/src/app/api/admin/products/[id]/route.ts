@@ -1,7 +1,8 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { productPriceHistory, products, nowText } from '@/db/schema';
-import { priceLabelFor, productUpdateSchema, requireAdmin } from '@/lib/catalogue';
+import { priceLabelFor, productUpdateSchema } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { describeStock, stockState } from '@/lib/stock';
 import { storeProductImage } from '@/lib/uploads';
 import { error, json } from '@/lib/http';
@@ -40,8 +41,9 @@ function present(row: typeof products.$inferSelect) {
 }
 
 export async function PATCH(request: Request, { params }: Ctx) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'catalogue.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const { id } = await params;
   const existing = await findProduct(id);
@@ -149,8 +151,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
 }
 
 export async function DELETE(request: Request, { params }: Ctx) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'catalogue.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const { id } = await params;
   const existing = await findProduct(id);

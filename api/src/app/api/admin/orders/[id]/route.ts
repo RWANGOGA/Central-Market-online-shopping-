@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { recordMovement } from '@/lib/stockLedger';
 import { ORDER_FLOW, allowedNext, canTransition, isOrderStatus } from '@/lib/orderFlow';
 import { error, json } from '@/lib/http';
@@ -66,8 +67,9 @@ export async function GET(request: Request, { params }: Ctx) {
 }
 
 export async function PATCH(request: Request, { params }: Ctx) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'orders.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error('A status is required', 422);

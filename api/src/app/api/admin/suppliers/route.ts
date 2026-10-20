@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { products, suppliers } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { error, json } from '@/lib/http';
 import { recordActivity } from '@/lib/activity';
 
@@ -44,8 +45,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'suppliers.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = supplierSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);
@@ -80,8 +82,9 @@ export async function POST(request: Request) {
 
 /** Link a supplier to the products they provide. */
 export async function PUT(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'suppliers.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   // The body can only be read once; parsing it twice is why this endpoint
   // used to fail every time.

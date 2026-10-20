@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, like, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { customers } from '@/db/schema';
-import { requireRole } from '@/lib/adminAuth';
+import { guardAdmin } from '@/lib/adminAuth';
 import { error, json } from '@/lib/http';
 
 const listSchema = z.object({
@@ -13,8 +13,9 @@ const listSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const admin = await requireRole(request, ['owner', 'manager']);
-  if (!admin) return error('Not signed in', 401);
+  // Any signed-in staff member may look a customer up; delivery needs it.
+  const guard = await guardAdmin(request);
+  if (!guard.ok) return error(guard.message, guard.status);
 
   const url = new URL(request.url);
   const parsed = listSchema.safeParse({

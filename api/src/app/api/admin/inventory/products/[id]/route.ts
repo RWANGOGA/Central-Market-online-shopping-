@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { products } from '@/db/schema';
-import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { LOW_STOCK_THRESHOLD } from '@/lib/stock';
 import { StockConflict } from '@/lib/stockErrors';
 import { recordMovement } from '@/lib/stockLedger';
@@ -39,8 +39,9 @@ const patchSchema = z.object({
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Ctx) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'inventory.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -124,8 +125,9 @@ const settingsSchema = z.object({
 });
 
 export async function PUT(request: Request, { params }: Ctx) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'inventory.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = settingsSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);

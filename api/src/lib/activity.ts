@@ -20,6 +20,9 @@ export type ActivityAction =
   | 'promo.pause'
   | 'promo.resume'
   | 'customer.deactivate'
+  | 'admin.create'
+  | 'admin.update'
+  | 'admin.revoke'
   | 'admin.password_change';
 
 export type ActivityInput = {

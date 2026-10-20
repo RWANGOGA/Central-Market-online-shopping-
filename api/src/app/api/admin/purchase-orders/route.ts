@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { purchaseOrderItems, purchaseOrders, suppliers } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { error, json, parsePositiveInt } from '@/lib/http';
 import { recordActivity } from '@/lib/activity';
 
@@ -65,8 +66,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'suppliers.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);

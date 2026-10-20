@@ -1,15 +1,16 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { products, nowText } from '@/db/schema';
-import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { describeStock, stockState } from '@/lib/stock';
 import { error, json } from '@/lib/http';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(_request: Request, { params }: Ctx) {
-  const admin = await requireAdmin(_request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(_request, 'catalogue.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const { id } = await params;
   const key = Number(id);
