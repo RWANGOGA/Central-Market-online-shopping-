@@ -57,6 +57,7 @@ function OrderConfirmationRoute({ onMenuClick }: { onMenuClick: () => void }) {
       orderReference={reference ?? null}
       onShop={() => navigate('/')}
       onMenuClick={onMenuClick}
+      onPay={reference ? () => navigate(`/pay/${reference}`) : undefined}
     />
   );
 }
@@ -125,6 +126,10 @@ function AppShell() {
     showOverlay,
     overlayProduct,
     overlayQuantity,
+    promo,
+    applyPromo,
+    clearPromo,
+    reorderFromOrder,
   } = useCart();
   const {
     customerSession,
@@ -164,6 +169,10 @@ function AppShell() {
     }
 
     try {
+      const subtotal = cartItems.reduce((sum, item) => sum + item.priceValue * item.quantity, 0);
+      // Only a code that still applies to this basket is sent; the server
+      // recomputes it and refuses the order if it has since been exhausted.
+      const promoCode = promo && subtotal >= promo.minSubtotal ? promo.code : undefined;
       const order = await createOrder(cartId, {
         fullName: customerData.fullName.trim(),
         phone: customerData.phone.trim(),
@@ -173,7 +182,7 @@ function AppShell() {
         parish: customerData.parish || undefined,
         village: customerData.village || undefined,
         address: customerData.address.trim(),
-      });
+      }, promoCode);
       if (!order.reference) throw new Error('The server did not return an order reference.');
       setOrderReference(order.reference);
       navigate(`/pay/${order.reference}`);
@@ -189,7 +198,7 @@ function AppShell() {
   return (
     <div className="min-h-dvh bg-[#f7f7f5] p-2 sm:p-4">
       {/* Responsive shop shell: full width on small screens, bezel frame on md+. */}
-      <div className="max-w-[430px] mx-auto bg-[#ffffff] relative overflow-hidden rounded-[40px] shadow-2xl md:border-8 md:border-black md:rounded-[52px]">
+      <div className="max-w-[430px] mx-auto bg-[#ffffff] relative overflow-hidden rounded-[40px] shadow-2xl md:border-8 md:border-black md:rounded-[52px] h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-2rem)] md:max-h-[900px]">
         <Routes>
           <Route
             path="/"
@@ -222,6 +231,9 @@ function AppShell() {
                 onMenuClick={openMenu}
                 onUpdateQuantity={updateCartItemQuantity}
                 onGoToCheckout={() => navigate('/checkout')}
+                promo={promo}
+                onApplyPromo={applyPromo}
+                onClearPromo={clearPromo}
                 errorMessage={purchaseError}
               />
             }
@@ -232,6 +244,7 @@ function AppShell() {
               <CheckoutPage
                 cartCount={cartCount}
                 customerInfo={customerInfo}
+                signedIn={!!customerSession}
                 onBack={() => navigate('/basket')}
                 onMenuClick={openMenu}
                 onProceedToPayment={handleProceedToPayment}
@@ -252,6 +265,7 @@ function AppShell() {
                 onCartClick={() => navigate('/basket')}
                 onLogout={logout}
                 onShopClick={() => navigate('/')}
+                onReorder={reorderFromOrder}
                 cartCount={cartCount}
               />
             }

@@ -15,6 +15,13 @@ import { hashToken, trackingCookie } from '@/lib/customerAuth';
 import { allow } from '@/lib/rateLimit';
 import { getClientIp } from '@/lib/clientIp';
 import { priceCart } from '@/lib/pricing';
+import {
+  PromoError,
+  claimPromo,
+  evaluatePromo,
+  findPromoForUpdate,
+  normalizePromoCode,
+} from '@/lib/promotions';
 import { createCustomerNotification } from '@/lib/notifications';
 
 
@@ -30,25 +37,29 @@ export async function POST(request: Request) {
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);
 
   const { cartId, shipping: guestShipping } = parsed.data;
+  const promoCode = parsed.data.promoCode ? normalizePromoCode(parsed.data.promoCode) : null;
+  if (parsed.data.promoCode && !promoCode) return error('Enter a valid promo code.', 422);
   const cartOwner = await requireCart(request, cartId);
   if (!cartOwner) return error('Cart not found', 404);
 
   const customer = await getCurrentCustomer(request);
   if (!customer && !guestShipping) return error('Sign in or provide delivery details', 401);
-  if (customer && guestShipping) return error('Do not override signed-in delivery details', 422);
 
-  const address = customer
-    ? {
-        fullName: customer.fullName,
-        phone: customer.phone,
-        address: customer.address,
-        region: customer.region,
-        district: customer.district,
-        subCounty: customer.subCounty,
-        parish: customer.parish,
-        village: customer.village,
-      }
-    : normalizeGuestAddress(guestShipping!);
+  // A saved address is often for someone else, so a signed-in customer may
+  // send a shipping block too; without one their profile address is used.
+  // Guests must always send one. Either way the chain is validated below.
+  const address = guestShipping
+    ? normalizeGuestAddress(guestShipping)
+    : {
+        fullName: customer!.fullName,
+        phone: customer!.phone,
+        address: customer!.address,
+        region: customer!.region,
+        district: customer!.district,
+        subCounty: customer!.subCounty,
+        parish: customer!.parish,
+        village: customer!.village,
+      };
 
   const location = await checkLocation(address);
   if (!location.ok) return json({ error: location.message, conflict: { level: location.level } }, { status: 422 });
@@ -64,6 +75,8 @@ export async function POST(request: Request) {
   let result: {
     order: typeof orders.$inferSelect;
     subtotal: number;
+    discount: number;
+    promoCode: string | null;
     shipping: number;
     tax: number;
     total: number;
@@ -93,7 +106,22 @@ export async function POST(request: Request) {
       if (inactive) throw new Error(`PRODUCT_INACTIVE:${inactive.name}`);
 
       const subtotal = items.reduce((sum, item) => sum + item.priceValue * item.quantity, 0);
-      const pricing = priceCart(subtotal);
+
+      // The code is priced against what the cart holds right now, not what the
+      // browser remembered, and the redemption is claimed in this transaction.
+      let discount = 0;
+      let appliedPromo: string | null = null;
+      if (promoCode) {
+        const promo = await findPromoForUpdate(tx, promoCode);
+        if (!promo) throw new PromoError('That promo code was not found.');
+        const evaluation = evaluatePromo(promo, subtotal);
+        if ('reason' in evaluation) throw new PromoError(evaluation.reason);
+        await claimPromo(tx, promo, customer?.id ?? null, address.phone);
+        discount = evaluation.discount;
+        appliedPromo = promo.code;
+      }
+
+      const pricing = priceCart(subtotal, discount);
       const { shipping, tax, total } = pricing;
 
       for (const item of items) {
@@ -119,6 +147,8 @@ export async function POST(request: Request) {
         status: 'pending',
         updatedAt: nowText,
         subtotal,
+        discount,
+        promoCode: appliedPromo,
         shipping,
         tax,
         total,
@@ -150,6 +180,8 @@ export async function POST(request: Request) {
       return {
         order,
         subtotal,
+        discount,
+        promoCode: appliedPromo,
         shipping,
         tax,
         total,
@@ -168,6 +200,7 @@ export async function POST(request: Request) {
     if (err instanceof Error && err.message.startsWith('PRODUCT_INACTIVE:')) {
       return error(`${err.message.slice('PRODUCT_INACTIVE:'.length)} is no longer available`, 409);
     }
+    if (err instanceof PromoError) return error(err.message, 422);
     throw err;
   }
 
@@ -192,7 +225,14 @@ export async function POST(request: Request) {
 
   return json({
     data: { id: created.id, reference: created.reference, status: created.status, total: created.total, currency: created.currency },
-    totals: { subtotal: result.subtotal, shipping: result.shipping, tax: result.tax, total: result.total },
+    totals: {
+      subtotal: result.subtotal,
+      discount: result.discount,
+      promoCode: result.promoCode,
+      shipping: result.shipping,
+      tax: result.tax,
+      total: result.total,
+    },
     meta: { stockDrawnDown: result.stockDrawnDown },
   }, {
     status: 201,

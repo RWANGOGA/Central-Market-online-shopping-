@@ -104,6 +104,36 @@ export const customers = pgTable('customers', {
     .default(nowText),
 });
 
+/**
+ * The customer's address book.
+ *
+ * The profile row keeps the address used when none is chosen; this table holds
+ * the alternatives a shopper wants to reuse at checkout, such as a workplace
+ * or a relative's home. Phone and name are stored per entry because a saved
+ * address is often for somebody else.
+ */
+export const customerAddresses = pgTable('customer_addresses', {
+  id: serial('id').primaryKey(),
+  customerId: integer('customer_id')
+    .notNull()
+    .references(() => customers.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  fullName: text('full_name').notNull(),
+  phone: text('phone').notNull(),
+  region: text('region').notNull(),
+  district: text('district'),
+  subCounty: text('sub_county'),
+  parish: text('parish'),
+  village: text('village'),
+  address: text('address').notNull(),
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: text('created_at')
+    .notNull()
+    .default(nowText),
+}, (table) => [
+  index('idx_customer_addresses_customer').on(table.customerId),
+]);
+
 export const customerSessions = pgTable('customer_sessions', {
   id: serial('id').primaryKey(),
   customerId: integer('customer_id')
@@ -255,6 +285,35 @@ export const notifications = pgTable('notifications', {
   index('idx_notifications_admin').on(table.adminId, table.createdAt),
 ]);
 
+/**
+ * Discount campaigns. The rule lives here; orders keep the resolved discount
+ * and the code that produced it, so past totals never change when a campaign
+ * is edited or withdrawn.
+ */
+export const promoCodes = pgTable('promo_codes', {
+  id: serial('id').primaryKey(),
+  /** Normalised to upper case, no spaces. */
+  code: text('code').notNull().unique(),
+  description: text('description').notNull().default(''),
+  kind: text('kind', { enum: ['percent', 'fixed'] }).notNull(),
+  /** Percent off (1-100) or shillings off, depending on kind. */
+  value: integer('value').notNull(),
+  /** Below this subtotal the code is refused. */
+  minSubtotal: integer('min_subtotal').notNull().default(0),
+  /** Caps a percent code; null means no cap. */
+  maxDiscount: integer('max_discount'),
+  active: boolean('active').notNull().default(true),
+  /** UTC "YYYY-MM-DD HH:MM:SS", same as every other timestamp here. */
+  startsAt: text('starts_at'),
+  endsAt: text('ends_at'),
+  /** Redemptions across all customers; null means unlimited. */
+  usageLimit: integer('usage_limit'),
+  usedCount: integer('used_count').notNull().default(0),
+  /** Redemptions per customer or phone number; null means unlimited. */
+  perCustomerLimit: integer('per_customer_limit'),
+  createdAt: text('created_at').notNull().default(nowText),
+});
+
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   reference: text('reference').notNull().unique(),
@@ -273,6 +332,9 @@ export const orders = pgTable('orders', {
     .notNull()
     .default('pending'),
   subtotal: integer('subtotal').notNull(),
+  /** Promo discount resolved at order time; the rule is kept on promo_codes. */
+  discount: integer('discount').notNull().default(0),
+  promoCode: text('promo_code'),
   shipping: integer('shipping').notNull().default(0),
   tax: integer('tax').notNull().default(0),
   total: integer('total').notNull(),

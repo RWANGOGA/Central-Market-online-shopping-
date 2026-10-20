@@ -1,10 +1,12 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { orderItems, orders } from '@/db/schema';
+import { orderItems, orderStatusEvents, orders, payments } from '@/db/schema';
 import { error, json } from '@/lib/http';
 import { requireAdmin } from '@/lib/catalogue';
 import { getCurrentCustomer } from '@/lib/customerSession';
 import { ownsOrder } from '@/lib/orderOwnership';
+import { toPaymentDto } from '@/lib/payments';
+import { toTimelineDto } from '@/lib/orderTimeline';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -20,9 +22,33 @@ export async function GET(request: Request, { params }: Ctx) {
   const isOwner = Boolean(customer && customer.id === order.customerId) || await ownsOrder(request, order);
   if (!admin && !isOwner) return error('Order not found', 404);
 
-  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+  const [items, timeline, orderPayments] = await Promise.all([
+    db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
+    db
+      .select()
+      .from(orderStatusEvents)
+      .where(eq(orderStatusEvents.orderId, order.id))
+      .orderBy(asc(orderStatusEvents.createdAt), asc(orderStatusEvents.id)),
+    db
+      .select()
+      .from(payments)
+      .where(eq(payments.orderId, order.id))
+      .orderBy(asc(payments.createdAt)),
+  ]);
+
   // The tracking-token hash is a credential as far as this response is
   // concerned; ownership was already proved above, the hash is not needed.
   const { trackingTokenHash: _trackingTokenHash, ...safe } = order;
-  return json({ data: { ...safe, items } });
+
+  return json({
+    data: {
+      ...safe,
+      items,
+      timeline: timeline.map(toTimelineDto),
+      payments: orderPayments.map((payment) => ({
+        ...toPaymentDto(payment),
+        createdAt: payment.createdAt,
+      })),
+    },
+  });
 }

@@ -1,37 +1,49 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  adjustInventory,
+  analyticsExportUrl,
   cancelPurchaseOrder,
   changePassword,
-  createPurchaseOrder,
   createProduct,
+  createPromo,
+  createPurchaseOrder,
   createSupplier,
   currentAdmin,
   deactivateCustomer,
   fileToDataUrl,
   getForecast,
+  getAnalyticsOverview,
   listActivityLog,
   listAdminProducts,
   listCustomers,
   listInventoryMovements,
+  listProductPerformance,
+  listPromos,
   listPurchaseOrders,
   listRegionalDemand,
   listSalesTrend,
   listSuppliers,
   receivePurchaseOrder,
+  setPromoActive,
   signOut,
-  adjustInventory,
   updateProduct,
-  withdrawProduct,
+  type ActivityLogRow,
   type AdminIdentity,
   type AdminProduct,
+  type AdminPromo,
+  type AnalyticsOverview,
   type CustomerRow,
+  type ForecastResult,
   type ProductDraft,
+  type ProductPerformanceRow,
+  type PromoDraft,
   type PurchaseOrderRow,
+  type RegionalDemandRow,
+  type SalesTrendPoint,
+  type StockMovementRow,
   type SupplierRow,
 } from '../lib/adminApi';
-import { setOrderStatus, type OrderRow } from '../lib/orderApi';
 import AdminGate from './AdminGate';
-import OrderQueue from './OrderQueue';
 import StockBadge from './StockBadge';
 import { describeStockOf } from '../lib/stockApi';
 import { formatUgx } from '../lib/currency';
@@ -43,6 +55,7 @@ type Tab =
   | 'inventory'
   | 'purchase-orders'
   | 'suppliers'
+  | 'promotions'
   | 'analytics'
   | 'activity'
   | 'admins'
@@ -115,27 +128,28 @@ function StaffShell({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const flash = (message: string) => {
+  const flash = useCallback((message: string) => {
     setNotice(message);
     setError(null);
     window.setTimeout(() => setNotice(null), 4000);
-  };
+  }, []);
 
-  const fail = (message: string) => {
+  const fail = useCallback((message: string) => {
     setError(message);
     setNotice(null);
     window.setTimeout(() => setError(null), 5000);
-  };
+  }, []);
 
   const tabs: { value: Tab; label: string; disabled?: boolean }[] = [
     { value: 'catalogue', label: 'Catalogue' },
     { value: 'inventory', label: 'Inventory' },
     { value: 'purchase-orders', label: 'Purchase orders' },
     { value: 'suppliers', label: 'Suppliers' },
+    { value: 'promotions', label: 'Promotions' },
     { value: 'analytics', label: 'Analytics' },
     { value: 'activity', label: 'Activity log' },
     { value: 'customers', label: 'Customers' },
-    ...(canManageAdmins ? [{ value: 'admins', label: 'Admins' }] : []),
+    ...(canManageAdmins ? [{ value: 'admins' as const, label: 'Admins' }] : []),
   ];
 
   return (
@@ -173,7 +187,11 @@ function StaffShell({
             <button
               key={item.value}
               disabled={item.disabled}
-              onClick={() => setTab(item.value)}
+              onClick={(event) => {
+                setTab(item.value);
+                // The strip is wider than the phone: keep the chosen pill visible.
+                event.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest' });
+              }}
               className={`whitespace-nowrap px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',_sans-serif] ${
                 tab === item.value
                   ? 'bg-[#426b1f] text-white'
@@ -204,8 +222,9 @@ function StaffShell({
         {tab === 'inventory' && <InventoryPanel flash={flash} fail={fail} />}
         {tab === 'purchase-orders' && <PurchaseOrdersPanel flash={flash} fail={fail} />}
         {tab === 'suppliers' && <SuppliersPanel flash={flash} fail={fail} />}
+        {tab === 'promotions' && <PromotionsPanel flash={flash} fail={fail} />}
         {tab === 'analytics' && <AnalyticsPanel flash={flash} fail={fail} />}
-        {tab === 'activity' && <ActivityPanel flash={flash} fail={fail} />}
+        {tab === 'activity' && <ActivityPanel fail={fail} />}
         {tab === 'customers' && <CustomersPanel flash={flash} fail={fail} />}
         {tab === 'admins' && canManageAdmins && <AdminsPanel flash={flash} fail={fail} />}
       </div>
@@ -228,10 +247,10 @@ function CataloguePanel({
 
   const load = useCallback(async () => {
     const result = await listAdminProducts();
+    setLoading(false);
     if (!result) return fail('Could not reach the service.');
     if (!result.ok) return fail(result.error);
     setProducts(result.data);
-    setLoading(false);
   }, [fail]);
 
   useEffect(() => {
@@ -240,8 +259,14 @@ function CataloguePanel({
 
   const handleCreated = async (draft: ProductDraft, imageDataUrl?: string) => {
     const result = await createProduct(imageDataUrl ? { ...draft, imageDataUrl } : draft);
-    if (!result) return fail('Could not reach the service.');
-    if (!result.ok) return fail(result.error);
+    if (!result) {
+      fail('Could not reach the service.');
+      return false;
+    }
+    if (!result.ok) {
+      fail(result.error);
+      return false;
+    }
     setAdding(false);
     flash(`Added ${result.data.name}.`);
     await load();
@@ -271,10 +296,7 @@ function CataloguePanel({
     <div className="p-4 space-y-3">
       {!adding && (
         <button
-          onClick={() => {
-            setAdding(true);
-            setError(null);
-          }}
+          onClick={() => setAdding(true)}
           className="w-full rounded-xl bg-[#426b1f] text-white py-3 text-[14px] font-['Inter:Medium',_sans-serif]"
         >
           Add a product
@@ -500,33 +522,43 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /* ---------------- Inventory ---------------- */
 
 function InventoryPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
-  const [movements, setMovements] = useState<any[]>([]);
+  const [movements, setMovements] = useState<StockMovementRow[]>([]);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [productId, setProductId] = useState<number | null>(null);
   const [delta, setDelta] = useState('');
   const [reason, setReason] = useState<'adjustment' | 'waste' | 'return' | 'correction'>('adjustment');
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const result = await listInventoryMovements({ limit: 50 });
-    if (!result) return fail('Could not reach the service.');
-    if (!result.ok) return fail(result.error);
-    setMovements(result.data.data);
+    const [m, p] = await Promise.all([
+      listInventoryMovements({ limit: 50 }),
+      listAdminProducts(),
+    ]);
     setLoading(false);
+    if (!m) return fail('Could not reach the service.');
+    if (!m.ok) return fail(m.error);
+    setMovements(m.data.data);
+    if (p && p.ok) setProducts(p.data);
   }, [fail]);
 
   useEffect(() => { load(); }, [load]);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
     const pid = Number(productId);
     const d = Number(delta);
-    if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(d) || d === 0) return;
-    setAdjusting(pid);
+    if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(d) || d === 0) {
+      return fail('Pick a product and a whole-number change.');
+    }
+    setBusy(true);
     const result = await adjustInventory(pid, { delta: d, reason, note: note || undefined });
+    setBusy(false);
     if (!result) return fail('Could not reach the service.');
     if (!result.ok) return fail(result.error);
-    setProductId(null); setDelta(''); setNote(''); setAdjusting(null);
+    setProductId(null); setDelta(''); setNote('');
+    flash(`${result.data.name} is now ${result.data.stock} ${result.data.unit}.`);
     await load();
   };
 
@@ -562,17 +594,22 @@ function InventoryPanel({ flash, fail }: { flash: (m: string) => void; fail: (m:
         </table>
       )}
 
-      <div className="rounded-xl border border-neutral-200 bg-white p-3 space-y-2">
+      <form onSubmit={submit} className="rounded-xl border border-neutral-200 bg-white p-3 space-y-2">
         <p className="text-[13px] font-['Inter:Medium',_sans-serif]">Adjust stock</p>
-        <p className="text-[11px] text-[#757575]">Enter a product id and a signed delta (negative removes stock).</p>
-        <div className="grid grid-cols-5 gap-2 items-end">
-          <input
-            type="number"
-            placeholder="Product id"
-            value={productId == null ? '' : String(productId)}
-            onChange={(e) => setProductId(Number(e.target.value) || null)}
-            className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px]"
-          />
+        <p className="text-[11px] text-[#757575]">Pick a product and enter a signed delta (negative removes stock).</p>
+        <select
+          value={productId ?? ''}
+          onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : null)}
+          className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-[13px] bg-white"
+        >
+          <option value="">Choose a product</option>
+          {products.map((product) => (
+            <option key={product.id} value={product.id}>
+              {product.name} — {product.stock} {product.unit}
+            </option>
+          ))}
+        </select>
+        <div className="grid grid-cols-3 gap-2 items-center">
           <input
             type="number"
             placeholder="Delta"
@@ -582,30 +619,30 @@ function InventoryPanel({ flash, fail }: { flash: (m: string) => void; fail: (m:
           />
           <select
             value={reason}
-            onChange={(e) => setReason(e.target.value as any)}
-            className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px]"
+            onChange={(e) => setReason(e.target.value as typeof reason)}
+            className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px] bg-white"
           >
-            <option>adjustment</option>
-            <option>waste</option>
-            <option>return</option>
-            <option>correction</option>
+            <option value="adjustment">adjustment</option>
+            <option value="waste">waste</option>
+            <option value="return">return</option>
+            <option value="correction">correction</option>
           </select>
           <button
-            onClick={() => submit()}
-            disabled={productId == null || delta === ''}
+            type="submit"
+            disabled={busy || productId == null || delta === ''}
             className="bg-[#426b1f] text-white rounded-lg px-3 py-2 text-[13px] disabled:opacity-40"
           >
-            Apply
+            {busy ? 'Applying…' : 'Apply'}
           </button>
         </div>
         <input
           type="text"
-          placeholder="Note"
+          placeholder="Note (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px] w-full"
         />
-      </div>
+      </form>
     </div>
   );
 }
@@ -614,19 +651,54 @@ function InventoryPanel({ flash, fail }: { flash: (m: string) => void; fail: (m:
 
 function PurchaseOrdersPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
   const [orders, setOrders] = useState<PurchaseOrderRow[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [adding, setAdding] = useState(false);
+  const [supplierId, setSupplierId] = useState<number | null>(null);
+  const [productId, setProductId] = useState<number | null>(null);
+  const [quantity, setQuantity] = useState('1');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const result = await listPurchaseOrders({ status: statusFilter || undefined });
-    if (!result) return fail('Could not reach the service.');
-    if (!result.ok) return fail(result.error);
-    const data = result.data as any;
-    setOrders(Array.isArray(data.data) ? data.data : [data.data]);
+    const [po, s, p] = await Promise.all([
+      listPurchaseOrders({ status: statusFilter || undefined }),
+      listSuppliers(),
+      listAdminProducts(),
+    ]);
     setLoading(false);
+    if (!po) return fail('Could not reach the service.');
+    if (!po.ok) return fail(po.error);
+    setOrders(Array.isArray(po.data.data) ? po.data.data : [po.data.data]);
+    if (s && s.ok) setSuppliers(s.data.data);
+    if (p && p.ok) setProducts(p.data);
   }, [fail, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (supplierId == null) return fail('Choose a supplier.');
+    if (productId == null) return fail('Choose a product.');
+    const qty = Number(quantity);
+    const price = Number(unitPrice || 0);
+    if (!Number.isInteger(qty) || qty < 1) return fail('Quantity must be at least 1.');
+    if (!Number.isInteger(price) || price < 0) return fail('Unit price must be zero or more.');
+    setBusy(true);
+    const result = await createPurchaseOrder({
+      supplierId,
+      items: [{ productId, quantity: qty, unitPrice: price }],
+    });
+    setBusy(false);
+    if (!result) return fail('Could not reach the service.');
+    if (!result.ok) return fail(result.error);
+    flash(`Purchase order ${result.data.reference} sent.`);
+    setAdding(false);
+    setSupplierId(null); setProductId(null); setQuantity('1'); setUnitPrice('');
+    await load();
+  };
 
   const handleCancel = async (order: PurchaseOrderRow) => {
     if (!window.confirm(`Cancel ${order.reference}?`)) return;
@@ -641,7 +713,7 @@ function PurchaseOrdersPanel({ flash, fail }: { flash: (m: string) => void; fail
     const result = await receivePurchaseOrder(order.id);
     if (!result) return fail('Could not reach the service.');
     if (!result.ok) return fail(result.error);
-    flash('Received.');
+    flash(`Received ${order.reference}; stock was added.`);
     await load();
   };
 
@@ -659,24 +731,68 @@ function PurchaseOrdersPanel({ flash, fail }: { flash: (m: string) => void; fail
           <option>cancelled</option>
         </select>
         <button
-          onClick={() => {
-            const supplier = window.prompt('Supplier name');
-            if (!supplier) return;
-            const items = window.prompt('Product id and quantity, e.g. "4,5"');
-            if (!items) return;
-            const [pid, qty] = items.split(',').map((s) => Number(s.trim()));
-            const po = { supplierId: 1, items: [{ productId: pid, quantity: qty, unitPrice: 0 }] };
-            createPurchaseOrder(po).then((r) => {
-              if (!r || !r.ok) return fail(r?.error ?? 'Could not create.');
-              flash('Purchase order created.');
-              load();
-            });
-          }}
+          onClick={() => setAdding((open) => !open)}
           className="bg-[#426b1f] text-white rounded-lg px-3 py-2 text-[13px]"
         >
-          New
+          {adding ? 'Close' : 'New'}
         </button>
       </div>
+
+      {adding && (
+        <form onSubmit={create} className="space-y-2 rounded-xl border border-neutral-200 bg-white p-3">
+          <select
+            value={supplierId ?? ''}
+            onChange={(e) => setSupplierId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-[13px] bg-white"
+          >
+            <option value="">Choose a supplier</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+            ))}
+          </select>
+          <select
+            value={productId ?? ''}
+            onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-[13px] bg-white"
+          >
+            <option value="">Choose a product</option>
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name} — {product.stock} {product.unit} left
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              min={1}
+              placeholder="Quantity"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px]"
+            />
+            <input
+              type="number"
+              min={0}
+              placeholder="Unit price (UGX)"
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
+              className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px]"
+            />
+          </div>
+          {suppliers.length === 0 && (
+            <p className="text-[11px] text-[#757575]">Add a supplier first on the Suppliers tab.</p>
+          )}
+          <button
+            type="submit"
+            disabled={busy || supplierId == null || productId == null}
+            className="w-full rounded-lg bg-[#426b1f] py-2 text-[13px] text-white disabled:opacity-40"
+          >
+            {busy ? 'Sending…' : 'Create purchase order'}
+          </button>
+        </form>
+      )}
+
       {loading ? (
         <p className="text-[13px] text-[#757575] py-4 text-center">Loading…</p>
       ) : orders.length === 0 ? (
@@ -686,8 +802,9 @@ function PurchaseOrdersPanel({ flash, fail }: { flash: (m: string) => void; fail
           <thead>
             <tr className="border-b border-neutral-200">
               <th className="pb-2 text-[#757575]">Reference</th>
+              <th className="pb-2 text-[#757575]">Supplier</th>
               <th className="pb-2 text-[#757575]">Status</th>
-              <th className="pb-2 text-[#757575] text-right">Lines</th>
+              <th className="pb-2 text-[#757575] text-right">Expected</th>
               <th className="pb-2 text-[#757575]">Created</th>
               <th className="pb-2 text-[#757575] text-right">Actions</th>
             </tr>
@@ -696,8 +813,11 @@ function PurchaseOrdersPanel({ flash, fail }: { flash: (m: string) => void; fail
             {orders.map((o) => (
               <tr key={o.id} className="border-b border-neutral-100">
                 <td className="py-2">{o.reference}</td>
+                <td className="py-2">
+                  {suppliers.find((s) => s.id === o.supplierId)?.name ?? `Supplier ${o.supplierId}`}
+                </td>
                 <td className="py-2">{o.status}</td>
-                <td className="py-2 text-right">—</td>
+                <td className="py-2 text-right">{o.expectedAt ?? '—'}</td>
                 <td className="py-2">{new Date(o.createdAt).toLocaleDateString()}</td>
                 <td className="py-2 text-right">
                   {o.status === 'sent' && (
@@ -735,10 +855,10 @@ function SuppliersPanel({ flash, fail }: { flash: (m: string) => void; fail: (m:
 
   const load = useCallback(async () => {
     const result = await listSuppliers();
+    setLoading(false);
     if (!result) return fail('Could not reach the service.');
     if (!result.ok) return fail(result.error);
     setSuppliers(result.data.data);
-    setLoading(false);
   }, [fail]);
 
   useEffect(() => { load(); }, [load]);
@@ -796,66 +916,554 @@ function SuppliersPanel({ flash, fail }: { flash: (m: string) => void; fail: (m:
   );
 }
 
-/* ---------------- Analytics ---------------- */
+/* ---------------- Promotions ---------------- */
 
-function AnalyticsPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
-  const [trend, setTrend] = useState<any[]>([]);
-  const [forecast, setForecast] = useState<any>(null);
+const EMPTY_PROMO: PromoDraft = {
+  code: '',
+  description: '',
+  kind: 'percent',
+  value: 10,
+  minSubtotal: 0,
+  maxDiscount: null,
+  usageLimit: null,
+  perCustomerLimit: 1,
+  endsAt: null,
+};
+
+const PROMO_STATE_STYLES: Record<AdminPromo['state'], string> = {
+  live: 'bg-[#426b1f]/10 text-[#426b1f]',
+  scheduled: 'bg-blue-50 text-blue-700',
+  paused: 'bg-neutral-100 text-neutral-600',
+  expired: 'bg-red-50 text-red-700',
+  exhausted: 'bg-amber-50 text-amber-700',
+};
+
+function PromotionsPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
+  const [promos, setPromos] = useState<AdminPromo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState<PromoDraft>(EMPTY_PROMO);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
-    const [t, f] = await Promise.all([
-      listSalesTrend({ bucket: 'day', limit: 14 }),
-      getForecast(),
-    ]);
-    if (!t || !t.ok) return fail(t?.error ?? 'Could not reach the service.');
-    setTrend(t.data);
-    if (f && f.ok) setForecast(f.data);
+    const result = await listPromos();
     setLoading(false);
+    if (!result) return fail('Could not reach the service.');
+    if (!result.ok) return fail(result.error);
+    setPromos(result.data);
   }, [fail]);
 
   useEffect(() => { load(); }, [load]);
 
+  const update = <K extends keyof PromoDraft>(key: K, value: PromoDraft[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!draft.code.trim()) return fail('Enter a code.');
+    if (!Number.isInteger(draft.value) || draft.value <= 0) return fail('Enter a discount greater than zero.');
+
+    const result = await createPromo({
+      ...draft,
+      code: draft.code.trim().toUpperCase(),
+      description: draft.description?.trim() || undefined,
+      minSubtotal: draft.minSubtotal ?? 0,
+      maxDiscount: draft.kind === 'percent' ? (draft.maxDiscount ?? null) : null,
+      usageLimit: draft.usageLimit ?? null,
+      perCustomerLimit: draft.perCustomerLimit ?? null,
+      endsAt: draft.endsAt || null,
+    });
+    if (!result) return fail('Could not reach the service.');
+    if (!result.ok) return fail(result.error);
+    setDraft(EMPTY_PROMO);
+    setAdding(false);
+    flash(`Code ${result.data.code} created.`);
+    await load();
+  };
+
+  const toggle = async (promo: AdminPromo) => {
+    setBusyId(promo.id);
+    const result = await setPromoActive(promo.id, !promo.active);
+    setBusyId(null);
+    if (!result) return fail('Could not reach the service.');
+    if (!result.ok) return fail(result.error);
+    flash(`${promo.code} is now ${result.data.active ? 'active' : 'paused'}.`);
+    await load();
+  };
+
+  const numberOrNull = (value: string) => (value.trim() === '' ? null : Math.max(0, Math.floor(Number(value) || 0)));
+
   return (
     <div className="space-y-3">
-      <p className="text-[14px] font-['Inter:Medium',_sans-serif] text-[#000000]">Sales trend (14 days)</p>
-      {loading ? (
-        <p className="text-[13px] text-[#757575] py-4 text-center">Loading…</p>
-      ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {trend.map((p) => (
-            <div key={p.bucket} className="rounded-xl border border-neutral-200 bg-white p-3">
-              <p className="text-[12px] text-[#757575]">{p.bucket}</p>
-              <p className="text-[16px] font-['Inter:Medium',_sans-serif]">{formatUgx(p.revenue)}</p>
-              <p className="text-[12px] text-[#757575]">{p.orders} orders · {p.units} units</p>
-            </div>
-          ))}
-        </div>
+      <div className="flex items-center justify-between">
+        <p className="text-[14px] font-['Inter:Medium',_sans-serif] text-[#000000]">Promo codes</p>
+        <button
+          onClick={() => setAdding((open) => !open)}
+          className="rounded-lg bg-[#426b1f] px-3 py-1.5 text-[12px] text-white"
+        >
+          {adding ? 'Close' : 'New code'}
+        </button>
+      </div>
+
+      {adding && (
+        <form onSubmit={submit} className="space-y-2 rounded-xl border border-neutral-200 bg-white p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="col-span-2 text-[12px] text-[#757575]">
+              Code
+              <input
+                value={draft.code}
+                onChange={(e) => update('code', e.target.value)}
+                placeholder="WELCOME10"
+                autoCapitalize="characters"
+                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] uppercase text-[#000000]"
+              />
+            </label>
+            <label className="col-span-2 text-[12px] text-[#757575]">
+              Description
+              <input
+                value={draft.description ?? ''}
+                onChange={(e) => update('description', e.target.value)}
+                placeholder="10% off the first basket"
+                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-[#000000]"
+              />
+            </label>
+            <label className="text-[12px] text-[#757575]">
+              Type
+              <select
+                value={draft.kind}
+                onChange={(e) => update('kind', e.target.value as PromoDraft['kind'])}
+                className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[13px] text-[#000000]"
+              >
+                <option value="percent">Percent off</option>
+                <option value="fixed">Shillings off</option>
+              </select>
+            </label>
+            <label className="text-[12px] text-[#757575]">
+              {draft.kind === 'percent' ? 'Percent (1–100)' : 'Shillings off'}
+              <input
+                type="number"
+                min={1}
+                value={draft.value}
+                onChange={(e) => update('value', Math.floor(Number(e.target.value) || 0))}
+                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-[#000000]"
+              />
+            </label>
+            <label className="text-[12px] text-[#757575]">
+              Minimum basket (UGX)
+              <input
+                type="number"
+                min={0}
+                value={draft.minSubtotal ?? 0}
+                onChange={(e) => update('minSubtotal', Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-[#000000]"
+              />
+            </label>
+            {draft.kind === 'percent' && (
+              <label className="text-[12px] text-[#757575]">
+                Cap (UGX, optional)
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.maxDiscount ?? ''}
+                  onChange={(e) => update('maxDiscount', numberOrNull(e.target.value))}
+                  placeholder="No cap"
+                  className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-[#000000]"
+                />
+              </label>
+            )}
+            <label className="text-[12px] text-[#757575]">
+              Total uses (optional)
+              <input
+                type="number"
+                min={1}
+                value={draft.usageLimit ?? ''}
+                onChange={(e) => update('usageLimit', numberOrNull(e.target.value))}
+                placeholder="Unlimited"
+                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-[#000000]"
+              />
+            </label>
+            <label className="text-[12px] text-[#757575]">
+              Uses per customer (optional)
+              <input
+                type="number"
+                min={1}
+                value={draft.perCustomerLimit ?? ''}
+                onChange={(e) => update('perCustomerLimit', numberOrNull(e.target.value))}
+                placeholder="Unlimited"
+                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-[#000000]"
+              />
+            </label>
+            <label className="col-span-2 text-[12px] text-[#757575]">
+              Ends on (optional)
+              <input
+                type="date"
+                value={draft.endsAt ?? ''}
+                onChange={(e) => update('endsAt', e.target.value || null)}
+                className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-[#000000]"
+              />
+            </label>
+          </div>
+          <button className="w-full rounded-lg bg-[#426b1f] py-2 text-[13px] text-white">Create code</button>
+        </form>
       )}
-      {forecast && (
-        <div className="rounded-xl border border-neutral-200 bg-white p-3">
-          <p className="text-[13px] text-[#757575]">Revenue last 7 days</p>
-          <p className="text-[16px] font-['Inter:Medium',_sans-serif]">{formatUgx(forecast.trailing.revenue7d)}</p>
-          <p className="text-[13px] text-[#757575]">Daily average (30d)</p>
-          <p className="text-[16px] font-['Inter:Medium',_sans-serif]">{formatUgx(forecast.trailing.dailyAverage30d)}</p>
+
+      {loading ? (
+        <p className="py-4 text-center text-[13px] text-[#757575]">Loading…</p>
+      ) : promos.length === 0 ? (
+        <p className="py-4 text-center text-[13px] text-[#757575]">No promo codes yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {promos.map((promo) => {
+            const rule = promo.kind === 'percent'
+              ? `${promo.value}% off${promo.maxDiscount ? ` (max ${formatUgx(promo.maxDiscount)})` : ''}`
+              : `${formatUgx(promo.value)} off`;
+            return (
+              <div key={promo.id} className="rounded-xl border border-neutral-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-['Inter:Medium',_sans-serif] text-[14px] text-[#000000]">{promo.code}</p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-['Inter:Medium',_sans-serif] ${PROMO_STATE_STYLES[promo.state]}`}>
+                        {promo.state}
+                      </span>
+                    </div>
+                    {promo.description && (
+                      <p className="mt-0.5 text-[11px] leading-[16px] text-[#757575]">{promo.description}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => toggle(promo)}
+                    disabled={busyId === promo.id}
+                    className="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-[11px] text-[#000000] disabled:opacity-50"
+                  >
+                    {promo.active ? 'Pause' : 'Resume'}
+                  </button>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-[#757575]">
+                  <div className="flex justify-between">
+                    <dt>Rule</dt>
+                    <dd className="text-[#000000]">{rule}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Min basket</dt>
+                    <dd className="text-[#000000]">{promo.minSubtotal ? formatUgx(promo.minSubtotal) : 'None'}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Used</dt>
+                    <dd className="text-[#000000]">
+                      {promo.usedCount}
+                      {promo.usageLimit ? ` / ${promo.usageLimit}` : ''}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Per customer</dt>
+                    <dd className="text-[#000000]">{promo.perCustomerLimit ?? 'Unlimited'}</dd>
+                  </div>
+                </dl>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
+/* ---------------- Analytics ---------------- */
+
+const RANGES = [
+  { days: 7, label: '7 days' },
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
+] as const;
+
+const PIPELINE: { value: string; label: string; color: string }[] = [
+  { value: 'pending', label: 'Pending', color: 'bg-amber-400' },
+  { value: 'processing', label: 'Processing', color: 'bg-blue-400' },
+  { value: 'shipped', label: 'Shipped', color: 'bg-indigo-400' },
+  { value: 'delivered', label: 'Delivered', color: 'bg-[#426b1f]' },
+  { value: 'cancelled', label: 'Cancelled', color: 'bg-red-400' },
+];
+
+const PAYMENT_LABELS: Record<string, string> = {
+  succeeded: 'Paid online',
+  cod: 'Cash on delivery',
+  pending: 'Awaiting payment',
+  awaiting_approval: 'Awaiting approval',
+  processing: 'Processing',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+
+/** Midnight `days` ago, in the server's text timestamp format. */
+function daysAgo(days: number) {
+  const date = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000);
+  return date.toISOString().slice(0, 10);
+}
+
+function AnalyticsPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
+  const [rangeDays, setRangeDays] = useState(30);
+  const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [trend, setTrend] = useState<SalesTrendPoint[]>([]);
+  const [topProducts, setTopProducts] = useState<ProductPerformanceRow[]>([]);
+  const [regions, setRegions] = useState<RegionalDemandRow[]>([]);
+  const [forecast, setForecast] = useState<ForecastResult | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const from = useMemo(() => daysAgo(rangeDays), [rangeDays]);
+  const bucket = rangeDays > 31 ? 'week' : 'day';
+
+  const load = useCallback(async (announce = false) => {
+    setLoading(true);
+    const [o, t, p, r, f] = await Promise.all([
+      getAnalyticsOverview({ from }),
+      listSalesTrend({ from, bucket, limit: rangeDays > 31 ? 14 : rangeDays }),
+      listProductPerformance({ from, limit: 6 }),
+      listRegionalDemand({ from }),
+      getForecast(),
+    ]);
+    setLoading(false);
+    if (!o) return fail('Could not reach the service.');
+    if (!o.ok) return fail(o.error);
+    setOverview(o.data);
+    setTrend(t && t.ok ? t.data : []);
+    setTopProducts(p && p.ok ? p.data : []);
+    setRegions(r && r.ok ? r.data : []);
+    if (f && f.ok) setForecast(f.data);
+    if (announce) flash('Dashboard refreshed.');
+  }, [bucket, fail, flash, from, rangeDays]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const totals = overview?.totals;
+  const chart = [...trend].reverse();
+  const peak = Math.max(...chart.map((point) => point.revenue), 1);
+  const pipelineTotal = (overview?.status ?? []).reduce((sum, row) => sum + row.count, 0);
+  const productPeak = Math.max(...topProducts.map((row) => row.revenue), 1);
+  const restock = (forecast?.inventory ?? [])
+    .filter((row) => row.daysOfCover !== null && row.daysOfCover <= 10)
+    .sort((a, b) => (a.daysOfCover ?? 0) - (b.daysOfCover ?? 0))
+    .slice(0, 5);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-1">
+          {RANGES.map((range) => (
+            <button
+              key={range.days}
+              onClick={() => setRangeDays(range.days)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-['Inter:Medium',_sans-serif] ${
+                rangeDays === range.days ? 'bg-[#426b1f] text-white' : 'bg-neutral-100 text-[#000000]'
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => load(true)} className="text-[11px] text-[#426b1f]">
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-[13px] text-[#757575] py-6 text-center">Crunching the last {rangeDays} days…</p>
+      ) : !overview || !totals ? (
+        <p className="text-[13px] text-[#757575] py-6 text-center">No analytics yet.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <Kpi label="Revenue" value={formatUgx(totals.revenue)} note={`${totals.orders} paid orders`} />
+            <Kpi label="Average basket" value={formatUgx(totals.averageOrderValue)} note={`${totals.units} units sold`} />
+            <Kpi label="Discount given" value={formatUgx(totals.discounts)} note={`${overview.promos.length} codes used`} />
+            <Kpi
+              label="New customers"
+              value={String(overview.newCustomers)}
+              note={`${overview.inventory.lowStock} low · ${overview.inventory.outOfStock} out of stock`}
+            />
+          </div>
+
+          <Section title={`Revenue per ${bucket}`}>
+            {chart.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No paid orders in this window.</p>
+            ) : (
+              <>
+                <div className="flex h-24 items-end justify-start gap-[2px]">
+                  {chart.map((point) => (
+                    <div
+                      key={point.bucket}
+                      title={`${point.bucket}: ${formatUgx(point.revenue)} · ${point.orders} orders`}
+                      className="max-w-[18px] flex-1 rounded-t bg-[#426b1f]/80"
+                      style={{ height: `${Math.max(4, (point.revenue / peak) * 96)}px` }}
+                    />
+                  ))}
+                </div>
+                <div className="mt-1 flex justify-between text-[10px] text-[#757575]">
+                  <span>{chart[0]?.bucket}</span>
+                  <span>{chart[chart.length - 1]?.bucket}</span>
+                </div>
+              </>
+            )}
+          </Section>
+
+          <Section title="Order pipeline">
+            {pipelineTotal === 0 ? (
+              <p className="text-[12px] text-[#757575]">No orders in this window.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {PIPELINE.map((stage) => {
+                  const count = overview.status.find((row) => row.status === stage.value)?.count ?? 0;
+                  return (
+                    <div key={stage.value} className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${stage.color}`} />
+                      <span className="w-[76px] text-[12px] text-[#000000]">{stage.label}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
+                        <div className={`h-full ${stage.color}`} style={{ width: `${(count / pipelineTotal) * 100}%` }} />
+                      </div>
+                      <span className="w-6 text-right text-[12px] text-[#000000]">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+
+          <Section title="Payment mix">
+            {overview.payments.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No payments in this window.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {overview.payments.map((row) => (
+                  <div key={row.status} className="flex justify-between gap-2">
+                    <dt className="text-[#757575]">{PAYMENT_LABELS[row.status] ?? row.status}</dt>
+                    <dd className="text-[#000000]">{row.count} · {formatUgx(row.amount)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <Section title="Top products">
+            {topProducts.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">Nothing sold in this window.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {topProducts.map((product) => (
+                  <div key={product.productId}>
+                    <div className="flex justify-between gap-2 text-[12px]">
+                      <span className="truncate text-[#000000]">{product.name}</span>
+                      <span className="shrink-0 text-[#757575]">{product.units} {product.unit}</span>
+                    </div>
+                    <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-neutral-100">
+                      <div
+                        className="h-full bg-[#426b1f]"
+                        style={{ width: `${(product.revenue / productPeak) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+
+          <Section title="Regional demand">
+            {regions.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No deliveries in this window.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {regions.slice(0, 5).map((row) => (
+                  <div key={`${row.region}-${row.district ?? ''}`} className="flex justify-between gap-2">
+                    <dt className="truncate text-[#757575]">{row.region}{row.district ? ` · ${row.district}` : ''}</dt>
+                    <dd className="shrink-0 text-[#000000]">
+                      {row.orders} order{row.orders === 1 ? '' : 's'} · {formatUgx(row.revenue)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <Section title="Restock soon">
+            {restock.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">Every product covers more than 10 days.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {restock.map((row) => (
+                  <div key={row.productId} className="flex justify-between gap-2">
+                    <dt className="truncate text-[#757575]">{row.name}</dt>
+                    <dd className="shrink-0 text-[#000000]">
+                      {row.daysOfCover} days · {row.stock} {row.unit} left
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <Section title="Promo redemptions">
+            {overview.promos.length === 0 ? (
+              <p className="text-[12px] text-[#757575]">No codes redeemed in this window.</p>
+            ) : (
+              <dl className="space-y-1 text-[12px]">
+                {overview.promos.map((promo) => (
+                  <div key={promo.code} className="flex justify-between gap-2">
+                    <dt className="text-[#000000]">{promo.code}</dt>
+                    <dd className="text-[#757575]">{promo.uses} uses · {formatUgx(promo.discount)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Section>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {(['sales', 'products', 'regions'] as const).map((source) => (
+              <a
+                key={source}
+                href={analyticsExportUrl(source, { from })}
+                className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[11px] text-[#426b1f]"
+              >
+                Download {source}.csv
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Kpi({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+      <p className="text-[11px] text-[#757575]">{label}</p>
+      <p className="text-[16px] font-['Inter:Medium',_sans-serif] text-[#000000]">{value}</p>
+      <p className="text-[10px] text-[#757575]">{note}</p>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+      <p className="mb-2 text-[12px] font-['Inter:Medium',_sans-serif] text-[#000000]">{title}</p>
+      {children}
+    </div>
+  );
+}
+
 /* ---------------- Activity Log ---------------- */
 
-function ActivityPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
-  const [logs, setLogs] = useState<any[]>([]);
+function ActivityPanel({ fail }: { fail: (m: string) => void }) {
+  const [logs, setLogs] = useState<ActivityLogRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     const result = await listActivityLog({ limit: 50 });
+    setLoading(false);
     if (!result) return fail('Could not reach the service.');
     if (!result.ok) return fail(result.error);
     setLogs(result.data.data);
-    setLoading(false);
   }, [fail]);
 
   useEffect(() => { load(); }, [load]);
@@ -902,13 +1510,13 @@ function CustomersPanel({ flash, fail }: { flash: (m: string) => void; fail: (m:
 
   const load = useCallback(async () => {
     const result = await listCustomers({ q: q || undefined, active: true, limit: 50 });
+    setLoading(false);
     if (!result) return fail('Could not reach the service.');
     if (!result.ok) return fail(result.error);
     setCustomers(result.data.data);
-    setLoading(false);
   }, [fail, q]);
 
-  useEffect(() => { load(); }, [load, q]);
+  useEffect(() => { load(); }, [load]);
 
   const handleDeactivate = async (c: CustomerRow) => {
     if (!window.confirm(`Deactivate ${c.fullName}?`)) return;

@@ -356,6 +356,12 @@ export default function PaymentPage({
               {totals && (
                 <dl className="rounded-xl border border-neutral-200 p-4 space-y-1.5">
                   <Row label="Subtotal" value={formatUgx(totals.subtotal)} />
+                  {totals.discount > 0 && (
+                    <Row
+                      label={totals.promoCode ? `Discount · ${totals.promoCode}` : 'Discount'}
+                      value={`− ${formatUgx(totals.discount)}`}
+                    />
+                  )}
                   <Row
                     label="Delivery"
                     value={totals.shipping === 0 ? 'Free' : formatUgx(totals.shipping)}

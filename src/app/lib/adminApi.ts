@@ -356,7 +356,88 @@ export async function createSupplier(input: CreateSupplierInput): Promise<Result
   return call<SupplierRow>('/suppliers', { method: 'POST', body: JSON.stringify(input) });
 }
 
+/* ---------- Promo codes ---------- */
+
+export type AdminPromo = {
+  id: number;
+  code: string;
+  description: string;
+  kind: 'percent' | 'fixed';
+  value: number;
+  minSubtotal: number;
+  maxDiscount: number | null;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  usageLimit: number | null;
+  usedCount: number;
+  perCustomerLimit: number | null;
+  createdAt: string;
+  state: 'live' | 'scheduled' | 'paused' | 'expired' | 'exhausted';
+};
+
+export type PromoDraft = {
+  code: string;
+  description?: string;
+  kind: 'percent' | 'fixed';
+  value: number;
+  minSubtotal?: number;
+  maxDiscount?: number | null;
+  usageLimit?: number | null;
+  perCustomerLimit?: number | null;
+  endsAt?: string | null;
+};
+
+export async function listPromos(): Promise<Result<AdminPromo[]>> {
+  return call<AdminPromo[]>('/promos');
+}
+
+export async function createPromo(draft: PromoDraft): Promise<Result<AdminPromo>> {
+  return call<AdminPromo>('/promos', { method: 'POST', body: JSON.stringify(draft) });
+}
+
+export async function setPromoActive(id: number, active: boolean): Promise<Result<AdminPromo>> {
+  return call<AdminPromo>(`/promos/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) });
+}
+
 /* ---------- Analytics ---------- */
+
+export type AnalyticsOverview = {
+  totals: {
+    orders: number;
+    units: number;
+    revenue: number;
+    discounts: number;
+    averageOrderValue: number;
+  };
+  status: { status: string; count: number }[];
+  payments: { status: string; count: number; amount: number }[];
+  promos: { code: string; uses: number; discount: number }[];
+  inventory: { activeProducts: number; lowStock: number; outOfStock: number };
+  newCustomers: number;
+};
+
+export type AnalyticsRange = { from?: string; to?: string };
+
+export async function getAnalyticsOverview(
+  filters?: AnalyticsRange,
+): Promise<Result<AnalyticsOverview>> {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  const qs = params.toString();
+  return call<AnalyticsOverview>(`/analytics/overview${qs ? `?${qs}` : ''}`);
+}
+
+export type ExportSource = 'sales' | 'products' | 'regions' | 'activity';
+
+/** A plain link the browser downloads with the session cookie attached. */
+export function analyticsExportUrl(source: ExportSource, filters?: AnalyticsRange): string {
+  const params = new URLSearchParams({ source });
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  return `${BASE}/analytics/export?${params.toString()}`;
+}
 
 export type SalesTrendPoint = {
   bucket: string;

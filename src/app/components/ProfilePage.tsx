@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { formatUgx } from "../lib/currency";
-import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, fetchCustomerPreferences, updateCustomerPreferences, fetchCustomerNotifications, markCustomerNotificationsRead, type CustomerProfile, type CustomerOrder, type CustomerPreferences, type CustomerNotification } from '../lib/customerApi';
+import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, fetchCustomerPreferences, updateCustomerPreferences, fetchCustomerNotifications, markCustomerNotificationsRead, fetchCustomerAddresses, createCustomerAddress, updateCustomerAddress, deleteCustomerAddress, type CustomerProfile, type CustomerOrder, type CustomerPreferences, type CustomerNotification, type CustomerAddress } from '../lib/customerApi';
+import type { ReorderOutcome } from '../lib/cartProvider';
 
 interface ProfilePageProps {
   customerInfo: {
@@ -42,10 +43,32 @@ interface ProfilePageProps {
   onCartClick: () => void;
   onLogout: () => void;
   onShopClick: () => void;
+  onReorder: (reference: string) => Promise<ReorderOutcome | null>;
   cartCount: number;
 }
 
 type Tab = 'overview' | 'orders' | 'details' | 'preferences';
+
+/** The editable shape of one address-book entry. */
+type AddressDraft = {
+  label: string;
+  fullName: string;
+  phone: string;
+  region: string;
+  district: string;
+  address: string;
+  isDefault: boolean;
+};
+
+const EMPTY_ADDRESS_DRAFT: AddressDraft = {
+  label: 'Home',
+  fullName: '',
+  phone: '',
+  region: '',
+  district: '',
+  address: '',
+  isDefault: false,
+};
 
 export default function ProfilePage({
   customerInfo,
@@ -56,6 +79,7 @@ export default function ProfilePage({
   onCartClick,
   onLogout,
   onShopClick,
+  onReorder,
   cartCount
 }: ProfilePageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -73,6 +97,12 @@ export default function ProfilePage({
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  const [addressEditor, setAddressEditor] = useState<{ id: number | null; draft: AddressDraft } | null>(null);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [reorderingReference, setReorderingReference] = useState<string | null>(null);
+  const [reorderFeedback, setReorderFeedback] = useState<{ tone: 'ok' | 'warn' | 'error'; lines: string[] } | null>(null);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -128,6 +158,14 @@ export default function ProfilePage({
     }
   }, []);
 
+  const loadAddresses = useCallback(async () => {
+    try {
+      setAddresses(await fetchCustomerAddresses());
+    } catch {
+      // The address book is optional; checkout still accepts a typed address.
+    }
+  }, []);
+
   const handleMarkAllRead = useCallback(async () => {
     if (unreadCount === 0) return;
     try {
@@ -158,7 +196,8 @@ export default function ProfilePage({
     loadOrders();
     loadPreferences();
     loadNotifications();
-  }, [loadProfile, loadOrders, loadPreferences, loadNotifications]);
+    loadAddresses();
+  }, [loadProfile, loadOrders, loadPreferences, loadNotifications, loadAddresses]);
 
   useEffect(() => {
     if (activeTab === 'orders') {
@@ -254,6 +293,125 @@ export default function ProfilePage({
       setError('Could not save preferences');
     } finally {
       setSavingPreferences(false);
+    }
+  };
+
+  /** Sends a past order back to the basket and reports what the server did. */
+  const handleReorder = async (reference: string) => {
+    setReorderingReference(reference);
+    setReorderFeedback(null);
+    try {
+      const outcome = await onReorder(reference);
+      if (!outcome) {
+        setReorderFeedback({
+          tone: 'error',
+          lines: ['The basket service is not reachable. Start the API and try again.'],
+        });
+        return;
+      }
+      const lines = outcome.added > 0
+        ? [`${outcome.added} item${outcome.added === 1 ? '' : 's'} added to your basket.`]
+        : ['Nothing could be added from this order.'];
+      for (const skip of outcome.skipped) lines.push(`${skip.name}: ${skip.reason}`);
+      setReorderFeedback({
+        tone: outcome.added === 0 ? 'warn' : outcome.skipped.length > 0 ? 'warn' : 'ok',
+        lines,
+      });
+    } catch (err) {
+      setReorderFeedback({
+        tone: 'error',
+        lines: [err instanceof Error ? err.message : 'Could not reorder this order.'],
+      });
+    } finally {
+      setReorderingReference(null);
+    }
+  };
+
+  const openAddressEditor = (address?: CustomerAddress) => {
+    setAddressError(null);
+    setAddressEditor({
+      id: address?.id ?? null,
+      draft: address
+        ? {
+            label: address.label,
+            fullName: address.fullName,
+            phone: address.phone,
+            region: address.region,
+            district: address.district ?? '',
+            address: address.address,
+            isDefault: address.isDefault,
+          }
+        : {
+            ...EMPTY_ADDRESS_DRAFT,
+            fullName: profile?.fullName ?? customerInfo.fullName,
+            phone: profile?.phone ?? customerInfo.phone,
+            region: profile?.region ?? customerInfo.region,
+            district: profile?.district ?? customerInfo.district,
+          },
+    });
+  };
+
+  const updateAddressDraft = <K extends keyof AddressDraft>(field: K, value: AddressDraft[K]) => {
+    setAddressEditor((prev) => (prev ? { ...prev, draft: { ...prev.draft, [field]: value } } : prev));
+  };
+
+  const saveAddress = async () => {
+    if (!addressEditor) return;
+    const draft = addressEditor.draft;
+
+    if (
+      draft.label.trim().length === 0 ||
+      draft.fullName.trim().length < 2 ||
+      draft.phone.trim().length === 0 ||
+      draft.region.trim().length === 0 ||
+      draft.address.trim().length < 3
+    ) {
+      setAddressError('Fill in the label, name, phone, region and delivery address.');
+      return;
+    }
+
+    setAddressSaving(true);
+    setAddressError(null);
+    const input = {
+      label: draft.label.trim(),
+      fullName: draft.fullName.trim(),
+      phone: draft.phone.trim(),
+      region: draft.region.trim(),
+      district: draft.district.trim() || null,
+      address: draft.address.trim(),
+      isDefault: draft.isDefault,
+    };
+    try {
+      if (addressEditor.id === null) {
+        await createCustomerAddress(input);
+      } else {
+        await updateCustomerAddress(addressEditor.id, input);
+      }
+      await loadAddresses();
+      setAddressEditor(null);
+    } catch (err) {
+      setAddressError(err instanceof Error ? err.message : 'Could not save this address.');
+    } finally {
+      setAddressSaving(false);
+    }
+  };
+
+  const deleteAddress = async (address: CustomerAddress) => {
+    if (!window.confirm(`Delete the “${address.label}” address?`)) return;
+    try {
+      await deleteCustomerAddress(address.id);
+      await loadAddresses();
+    } catch {
+      setAddressError('Could not delete this address.');
+    }
+  };
+
+  const makeDefaultAddress = async (address: CustomerAddress) => {
+    try {
+      await updateCustomerAddress(address.id, { isDefault: true });
+      await loadAddresses();
+    } catch {
+      setAddressError('Could not change the default address.');
     }
   };
 
@@ -584,6 +742,24 @@ export default function ProfilePage({
           {/* Tab: Orders */}
           {activeTab === 'orders' && (
             <div className="space-y-3 font-['Inter:Regular',_sans-serif]">
+              {reorderFeedback && (
+                <div
+                  className={`rounded-lg border p-3 text-[12px] space-y-1 ${
+                    reorderFeedback.tone === 'error'
+                      ? 'bg-red-50 border-red-200 text-red-700'
+                      : reorderFeedback.tone === 'warn'
+                        ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                        : 'bg-[#426b1f]/10 border-[#426b1f]/30 text-[#426b1f]'
+                  }`}
+                >
+                  {reorderFeedback.lines.map((line, index) => (
+                    <p key={index}>{line}</p>
+                  ))}
+                  <button onClick={onCartClick} className="font-medium underline pt-1">
+                    View basket
+                  </button>
+                </div>
+              )}
               {orderFilter !== 'all' && (
                 <button
                   onClick={() => setOrderFilter('all')}
@@ -622,6 +798,15 @@ export default function ProfilePage({
                         <span className="text-[12px] text-[#757575]">{order.region}{order.district ? `, ${order.district}` : ''}</span>
                         <span className="font-medium text-[#000000]">{formatUgx(order.total)}</span>
                       </div>
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={() => handleReorder(order.reference)}
+                          disabled={reorderingReference !== null}
+                          className="text-[12px] font-medium text-[#426b1f] border border-[#426b1f]/30 rounded-lg px-3 py-1.5 hover:bg-[#426b1f]/5 transition-colors disabled:opacity-50"
+                        >
+                          {reorderingReference === order.reference ? 'Adding…' : 'Reorder'}
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -631,6 +816,7 @@ export default function ProfilePage({
 
           {/* Tab: Shipping Details */}
           {activeTab === 'details' && (
+            <div className="space-y-4">
             <div className="border border-neutral-200 rounded-xl p-4 bg-white space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
                 <span className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">
@@ -720,6 +906,170 @@ export default function ProfilePage({
                   <p className="text-[#757575]">{displayPlaceOrDefault}</p>
                 </div>
               )}
+            </div>
+
+            {/* Saved addresses */}
+            <div className="border border-neutral-200 rounded-xl p-4 bg-white space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">
+                  Saved addresses
+                </h4>
+                {!addressEditor && addresses.length < 10 && (
+                  <button
+                    onClick={() => openAddressEditor()}
+                    className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#426b1f] hover:underline"
+                  >
+                    Add address
+                  </button>
+                )}
+              </div>
+
+              {addressError && (
+                <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-red-600">{addressError}</p>
+              )}
+
+              {addresses.length === 0 && !addressEditor && (
+                <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575]">
+                  No saved addresses yet. Add one to check out in a couple of taps.
+                </p>
+              )}
+
+              <div className="space-y-2">
+                {addresses.map((address) => (
+                  <div key={address.id} className="border border-neutral-100 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-['Inter:Medium',_sans-serif] text-[13px] text-[#000000]">
+                        {address.label}
+                      </span>
+                      {address.isDefault && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#426b1f] bg-[#426b1f]/10 px-2 py-0.5 rounded">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575]">
+                      {address.fullName} • {address.phone}
+                    </p>
+                    <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575]">
+                      {address.address}
+                      {address.district ? `, ${address.district}` : ''}
+                      {address.region ? `, ${address.region}` : ''}
+                    </p>
+                    <div className="flex gap-3 pt-1 font-['Inter:Medium',_sans-serif] text-[12px]">
+                      <button onClick={() => openAddressEditor(address)} className="text-[#426b1f] hover:underline">
+                        Edit
+                      </button>
+                      {!address.isDefault && (
+                        <button onClick={() => makeDefaultAddress(address)} className="text-[#426b1f] hover:underline">
+                          Set default
+                        </button>
+                      )}
+                      <button onClick={() => deleteAddress(address)} className="text-red-600 hover:underline">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {addressEditor && (
+                <div className="border border-[#426b1f]/30 rounded-lg p-3 space-y-2 font-['Inter:Regular',_sans-serif] text-[14px]">
+                  <p className="font-['Inter:Medium',_sans-serif] text-[13px] text-[#000000]">
+                    {addressEditor.id === null ? 'New address' : 'Edit address'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[12px] text-[#757575] block mb-1">Label</label>
+                      <input
+                        type="text"
+                        value={addressEditor.draft.label}
+                        onChange={(e) => updateAddressDraft('label', e.target.value)}
+                        placeholder="Home, Office…"
+                        className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[12px] text-[#757575] block mb-1">Full name</label>
+                      <input
+                        type="text"
+                        value={addressEditor.draft.fullName}
+                        onChange={(e) => updateAddressDraft('fullName', e.target.value)}
+                        className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[12px] text-[#757575] block mb-1">Phone number</label>
+                    <input
+                      type="tel"
+                      value={addressEditor.draft.phone}
+                      onChange={(e) => updateAddressDraft('phone', e.target.value)}
+                      placeholder="07XX XXX XXX"
+                      className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[12px] text-[#757575] block mb-1">Region</label>
+                      <input
+                        type="text"
+                        value={addressEditor.draft.region}
+                        onChange={(e) => updateAddressDraft('region', e.target.value)}
+                        placeholder="Central Region"
+                        className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[12px] text-[#757575] block mb-1">District / town</label>
+                      <input
+                        type="text"
+                        value={addressEditor.draft.district}
+                        onChange={(e) => updateAddressDraft('district', e.target.value)}
+                        placeholder="Kampala"
+                        className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[12px] text-[#757575] block mb-1">Delivery address and landmark</label>
+                    <input
+                      type="text"
+                      value={addressEditor.draft.address}
+                      onChange={(e) => updateAddressDraft('address', e.target.value)}
+                      placeholder="Plot number, street and nearest landmark"
+                      className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-[12px] text-[#757575] pt-1">
+                    <input
+                      type="checkbox"
+                      checked={addressEditor.draft.isDefault}
+                      onChange={(e) => updateAddressDraft('isDefault', e.target.checked)}
+                      className="accent-[#426b1f] w-4 h-4"
+                    />
+                    Use as my default address
+                  </label>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={saveAddress}
+                      disabled={addressSaving}
+                      className="px-4 py-2 rounded-lg bg-[#426b1f] text-white text-[13px] font-['Inter:Medium',_sans-serif] disabled:opacity-50"
+                    >
+                      {addressSaving ? 'Saving…' : 'Save address'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAddressEditor(null);
+                        setAddressError(null);
+                      }}
+                      className="px-4 py-2 rounded-lg border border-neutral-200 text-[13px] text-[#000000]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             </div>
           )}
 

@@ -16,6 +16,9 @@ export type ActivityAction =
   | 'purchase_order.receive'
   | 'purchase_order.cancel'
   | 'supplier.create'
+  | 'promo.create'
+  | 'promo.pause'
+  | 'promo.resume'
   | 'customer.deactivate'
   | 'admin.password_change';
 

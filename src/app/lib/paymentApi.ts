@@ -52,6 +52,8 @@ export type PaymentIntent = {
 
 export type PaymentTotals = {
   subtotal: number;
+  discount: number;
+  promoCode: string | null;
   shipping: number;
   tax: number;
   total: number;
