@@ -9,6 +9,7 @@ import { error, json } from '@/lib/http';
 import { requireCart } from '@/lib/cartOwnership';
 import { allow } from '@/lib/rateLimit';
 import { requireAdmin } from '@/lib/catalogue';
+import { csrfCheck } from '@/lib/security';
 
 /**
  * Mobile money fees in Uganda are charged by the sender, not the merchant, so
@@ -39,6 +40,8 @@ function makeReference() {
 }
 
 export async function POST(request: Request) {
+  const blocked = csrfCheck(request);
+  if (blocked) return blocked;
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) {
     return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);

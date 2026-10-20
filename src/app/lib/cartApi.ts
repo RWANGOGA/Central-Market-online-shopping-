@@ -1,10 +1,8 @@
+import { triggerUnauthorized } from './apiAuth';
+
 /**
  * Client for the cart endpoints in api/.
  *
- * Every call returns null instead of throwing when the API is unreachable, so
- * the app keeps working as a purely local cart when the backend is not
- * running. Callers treat null as "not synced" and carry on.
- */
 
 export type ApiCartItem = {
   productId: number;
@@ -33,7 +31,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
       },
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status === 401) triggerUnauthorized();
+      return null;
+    }
 
     const body = (await response.json()) as { data: T };
     return body.data;

@@ -1,3 +1,5 @@
+import { triggerUnauthorized } from './apiAuth';
+
 const API_BASE = '/api';
 
 export interface CustomerProfile {
@@ -106,6 +108,7 @@ function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }).then(async (res) => {
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
+    if (res.status === 401) triggerUnauthorized();
     if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
     return data as T;
   });

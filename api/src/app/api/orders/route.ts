@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { carts, cartItems, orderItems, orderStatusEvents, orders, products, nowText } from '@/db/schema';
 import { error, json } from '@/lib/http';
+import { csrfCheck } from '@/lib/security';
 import { checkLocation } from '@/lib/locationGuard';
 import { recordMovement } from '@/lib/stockLedger';
 import { publishOrderEvent } from '@/lib/orderEvents';
@@ -22,6 +23,8 @@ function makeReference() {
 }
 
 export async function POST(request: Request) {
+  const blocked = csrfCheck(request);
+  if (blocked) return blocked;
   const parsed = createOrderSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);
 
