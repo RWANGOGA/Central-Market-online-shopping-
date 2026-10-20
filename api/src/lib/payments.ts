@@ -1,14 +1,42 @@
-import { json } from '@/lib/http';
+import type { Payment } from '@/db/schema';
 
 /**
- * Payment channels available in Uganda.
+ * What a client is allowed to know about a payment. Payer instrument details,
+ * wallet identifiers, provider references and the settlement token hash stay
+ * on the server.
+ */
+export type PaymentDto = {
+  reference: string;
+  status: Payment['status'];
+  amount: number;
+  currency: string;
+  channel: Payment['channel'];
+  provider: string;
+  maskedCard: string | null;
+  failureReason: string | null;
+};
+
+export function toPaymentDto(payment: Payment): PaymentDto {
+  return {
+    reference: payment.reference,
+    status: payment.status,
+    amount: payment.amount,
+    currency: payment.currency,
+    channel: payment.channel,
+    provider: payment.provider,
+    maskedCard: payment.maskedCard,
+    failureReason: payment.failureReason,
+  };
+}
+
+/**
+ * Payment channels offered to customers.
  *
  * Mobile money carries real provider identifiers because the aggregator needs
- * them to route the USSD prompt. Card and wallet are card-network schemes
- * rather than single providers, so they carry a scheme instead.
+ * them to route the USSD prompt. Card is deliberately absent: the browser must
+ * use the gateway's hosted page, so no PAN ever reaches this server. Legacy
+ * rows may still carry `channel = 'card'`; the type stays wide enough for them.
  */
-
-export type Channel = 'mobile_money' | 'card' | 'wallet' | 'cod';
 
 export const PAYMENT_METHODS = {
   mobile_money: [
@@ -37,22 +65,6 @@ export const PAYMENT_METHODS = {
       ussd: '*111#',
       prefixes: ['071'],
       instructions: 'Dial *111# and follow the prompts to approve the payment.',
-    },
-  ],
-  card: [
-    {
-      id: 'visa',
-      provider: 'Visa',
-      label: 'Visa',
-      schemes: ['visa'],
-      instructions: 'A one-time authorisation is placed on your card and released once the rider hands over.',
-    },
-    {
-      id: 'mastercard',
-      provider: 'Mastercard',
-      label: 'Mastercard',
-      schemes: ['mastercard'],
-      instructions: 'A one-time authorisation is placed on your card and released once the rider hands over.',
     },
   ],
   cod: [
@@ -90,33 +102,6 @@ export function article(word: string) {
   return /^[AEIOU]/i.test(word) ? 'an' : 'a';
 }
 
-/** Keep only the last four digits for display; never store a full PAN. */
-export function maskCard(number: string) {
-  const digits = number.replace(/\D/g, '');
-  return `•••• ${digits.slice(-4)}`;
-}
-
-/**
- * Luhn check so an obviously invalid card is rejected before an authorisation
- * is attempted. The authoritative check belongs to the gateway.
- */
-export function luhnValid(number: string) {
-  const digits = number.replace(/\D/g, '');
-  if (digits.length < 12) return false;
-  let sum = 0;
-  let double = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let d = Number(digits[i]);
-    if (double) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-    double = !double;
-  }
-  return sum % 10 === 0;
-}
-
 /**
  * Approval instructions for a pending intent, so the client and the gateway
  * agree on what the customer is being told to do.
@@ -129,21 +114,8 @@ export function approvalInstructions(channel: string, provider: string) {
   if (channel === 'card') {
     return { instructions: 'Your bank will ask you to approve this payment.', ussd: null };
   }
+  if (channel === 'cod') {
+    return { instructions: 'Pay the rider when your order arrives.', ussd: null };
+  }
   return { instructions: 'Approve the payment prompt in your wallet app.', ussd: null };
-}
-
-export async function GET() {
-  return json({
-    data: Object.entries(PAYMENT_METHODS).map(([channel, methods]) => ({
-      channel,
-      methods: methods.map((m) => ({ ...m, channel })),
-    })),
-    meta: {
-      currency: 'UGX',
-      // Every channel is authoritative server-side on amount; the client only
-      // chooses the channel and supplies the instrument.
-      requiresApproval: ['mobile_money', 'wallet'],
-      note: 'Amount, fees and the final payable total are computed on the server when the intent is created.',
-    },
-  });
 }

@@ -24,9 +24,12 @@ export async function GET(request: Request) {
 
   switch (source) {
     case 'sales': {
-      const bucket = (url.searchParams.get('bucket') as 'day' | 'week' | 'month') ?? 'day';
-      rows = await salesTrend({ from, to, bucket });
-      filename = `sales-${bucket}-${from ?? 'all'}-${to ?? 'all'}.csv`;
+      const bucket = z
+        .enum(['day', 'week', 'month'])
+        .safeParse(url.searchParams.get('bucket') ?? 'day');
+      if (!bucket.success) return error('bucket must be one of: day, week, month', 422);
+      rows = await salesTrend({ from, to, bucket: bucket.data });
+      filename = `sales-${bucket.data}-${from ?? 'all'}-${to ?? 'all'}.csv`;
       break;
     }
     case 'products': {

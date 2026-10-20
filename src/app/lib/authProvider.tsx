@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { registerAuthHandler } from './apiAuth';
+import { fetchCustomerSession } from './customerApi';
 
 export interface CustomerSession {
   id: number;
@@ -51,12 +52,45 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function infoFromSession(customer: CustomerSession): CustomerInfo {
+  return {
+    fullName: customer.fullName,
+    phone: customer.phone,
+    region: customer.region,
+    district: customer.district || '',
+    subCounty: customer.subCounty || '',
+    parish: customer.parish || '',
+    village: customer.village || '',
+    address: customer.address,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [customerSession, setCustomerSession] = useState<CustomerSession | null>(null);
   const [customerInfo, setCustomerInfoState] = useState<CustomerInfo>(EMPTY_INFO);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [orderReference, setOrderReference] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Restore the session on load. The cookie is HttpOnly, so the browser cannot
+  // read it; only the server can say whether it is still valid.
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchCustomerSession()
+      .then((profile) => {
+        if (cancelled || !profile) return;
+        setCustomerSession(profile);
+        setCustomerInfoState(infoFromSession(profile));
+      })
+      .catch(() => {
+        // Offline or API not running: stay signed out, the shop still works.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Treat any API 401 as logged out: clear the session and return to the shop.
   useEffect(() => {
@@ -71,16 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback((customer: CustomerSession) => {
     setCustomerSession(customer);
-    setCustomerInfoState({
-      fullName: customer.fullName,
-      phone: customer.phone,
-      region: customer.region,
-      district: customer.district || '',
-      subCounty: customer.subCounty || '',
-      parish: customer.parish || '',
-      village: customer.village || '',
-      address: customer.address,
-    });
+    setCustomerInfoState(infoFromSession(customer));
     navigate('/profile');
   }, []);
 

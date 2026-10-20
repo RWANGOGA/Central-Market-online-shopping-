@@ -61,6 +61,30 @@ function OrderConfirmationRoute({ onMenuClick }: { onMenuClick: () => void }) {
   );
 }
 
+function PaymentRoute({ onMenuClick }: { onMenuClick: () => void }) {
+  const { reference } = useParams<{ reference: string }>();
+  const navigate = useNavigate();
+  const { cartCount, cartId, finalizePurchase } = useCart();
+  const { customerInfo } = useAuth();
+
+  return (
+    <PaymentPage
+      cartCount={cartCount}
+      cartId={cartId}
+      // The order was created at checkout; the URL is its reference, and the
+      // server reads the amount from it.
+      orderReference={reference ?? null}
+      customerName={customerInfo.fullName}
+      onBack={() => navigate('/checkout')}
+      onMenuClick={onMenuClick}
+      onProceedToConfirmation={() => {
+        finalizePurchase(cartId);
+        navigate(`/order/${reference ?? ''}`);
+      }}
+    />
+  );
+}
+
 export default function App() {
   const navigate = useNavigate();
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -75,6 +99,8 @@ export default function App() {
     addToCart,
     updateCartItemQuantity,
     toggleFavorite,
+    searchTerm,
+    sortOption,
     setSearchTerm,
     setSortOption,
     stockLevels,
@@ -82,7 +108,6 @@ export default function App() {
     showOverlay,
     overlayProduct,
     overlayQuantity,
-    finalizePurchase,
   } = useCart();
   const {
     customerSession,
@@ -92,7 +117,6 @@ export default function App() {
     setCustomerInfo,
     purchaseError,
     setPurchaseError,
-    orderReference,
     setOrderReference,
   } = useAuth();
 
@@ -142,11 +166,6 @@ export default function App() {
         navigate('/basket');
       }
     }
-  };
-
-  const handleProceedToConfirmation = () => {
-    finalizePurchase(cartId);
-    navigate(`/order/${orderReference ?? ''}`);
   };
 
   return (
@@ -206,16 +225,7 @@ export default function App() {
                 />
                 <Route
                   path="/pay/:reference"
-                  element={
-                    <PaymentPage
-                      cartCount={cartCount}
-                      cartId={cartId}
-                      customerName={customerInfo.fullName}
-                      onBack={() => navigate('/checkout')}
-                      onMenuClick={openMenu}
-                      onProceedToConfirmation={handleProceedToConfirmation}
-                    />
-                  }
+                  element={<PaymentRoute onMenuClick={openMenu} />}
                 />
                 <Route path="/order/:reference" element={<OrderConfirmationRoute onMenuClick={openMenu} />} />
                 <Route

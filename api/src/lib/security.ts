@@ -1,6 +1,12 @@
 import { error } from './http';
 
-/** Reject mutating requests whose Origin host differs from Host (CSRF). */
+/**
+ * Reject mutating requests whose Origin host differs from Host (CSRF).
+ *
+ * Hostnames are compared rather than host:port pairs, because the dev proxy
+ * forwards to a different port than the page is served from. Cross-site
+ * requests still differ by hostname, which is what this check is for.
+ */
 export function csrfCheck(request: Request): Response | null {
   const method = request.method;
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return null;
@@ -9,7 +15,7 @@ export function csrfCheck(request: Request): Response | null {
   if (!origin || !host) return null;
   try {
     const o = new URL(origin);
-    if (o.host !== host) return error('Origin must match Host', 403);
+    if (o.hostname !== host.split(':')[0]) return error('Origin must match Host', 403);
   } catch {
     return error('Invalid Origin', 403);
   }

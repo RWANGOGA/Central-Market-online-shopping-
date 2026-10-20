@@ -5,7 +5,11 @@
  * payment screen degrades to "unavailable" instead of breaking.
  */
 
-export type PaymentChannel = 'mobile_money' | 'card' | 'wallet';
+/**
+ * Card is intentionally absent: card data is never posted to this server. A
+ * card payment belongs on the gateway's hosted page.
+ */
+export type PaymentChannel = 'mobile_money' | 'wallet' | 'cod';
 
 export type PaymentMethod = {
   id: string;
@@ -29,16 +33,15 @@ export type PaymentIntent = {
   status: string;
   amount: number;
   currency: string;
-  payerPhone: string | null;
-  walletId: string | null;
   maskedCard: string | null;
   failureReason: string | null;
   /**
-   * Issued once, when the intent is created. Presenting it is what allows this
-   * browser to report the outcome, so it must be kept for the life of the flow.
+   * Issued once, in development only. Presenting it is what allows this
+   * browser to report the outcome; a production deployment settles through the
+   * gateway webhook and never sends one.
    */
-  settlementToken: string;
-  nextAction: {
+  settlementToken?: string;
+  nextAction?: {
     channel: PaymentChannel;
     provider: string;
     status: string;
@@ -49,7 +52,8 @@ export type PaymentIntent = {
 
 export type PaymentTotals = {
   subtotal: number;
-  delivery: number;
+  shipping: number;
+  tax: number;
   total: number;
   currency: string;
 };
@@ -105,12 +109,16 @@ export async function fetchPaymentMethods(): Promise<PaymentMethods | null> {
 
 export type CreateIntentInput = {
   cartId: number;
+  /**
+   * The order this intent pays for. The server reads the amount from it, so
+   * the browser never states what is due.
+   */
+  orderReference: string;
   channel: PaymentChannel;
   provider: string;
   payerName?: string;
   payerPhone?: string;
   walletId?: string;
-  card?: { number: string; expiry: string; ccv: string };
 };
 
 export async function createPaymentIntent(
@@ -127,7 +135,7 @@ export async function fetchPaymentIntent(reference: string): Promise<Result<Paym
 }
 
 /**
- * Report the outcome back to the server.
+ * Report the outcome back to the server (development only).
  *
  * The settlement token from createPaymentIntent is required: it proves this
  * browser opened the intent, so a reference on its own cannot be used to mark

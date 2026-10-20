@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { UPLOAD_ROOT } from '@/lib/uploads';
 
-const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.svg', '.avif']);
+const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif']);
 
 /**
  * Serves product imagery from two places:
@@ -64,6 +64,10 @@ export async function GET(
         // Uploaded names carry a timestamp, so a replaced image is a new URL
         // and the cached copy cannot go stale.
         'cache-control': 'public, max-age=31536000, immutable',
+        // The file is data, never a document: no script, no framing, and no
+        // MIME sniffing that could reinterpret it.
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; sandbox",
       },
     });
   }
@@ -80,8 +84,6 @@ function mimeFor(extension: string) {
       return 'image/jpeg';
     case '.webp':
       return 'image/webp';
-    case '.svg':
-      return 'image/svg+xml';
     case '.avif':
       return 'image/avif';
     default:

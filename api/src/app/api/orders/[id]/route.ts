@@ -21,5 +21,8 @@ export async function GET(request: Request, { params }: Ctx) {
   if (!admin && !isOwner) return error('Order not found', 404);
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-  return json({ data: { ...order, items } });
+  // The tracking-token hash is a credential as far as this response is
+  // concerned; ownership was already proved above, the hash is not needed.
+  const { trackingTokenHash: _trackingTokenHash, ...safe } = order;
+  return json({ data: { ...safe, items } });
 }

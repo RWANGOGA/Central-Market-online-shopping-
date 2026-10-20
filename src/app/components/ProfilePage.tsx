@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { formatUgx } from "../lib/currency";
-import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, fetchCustomerPreferences, updateCustomerPreferences, fetchCustomerNotifications, type CustomerProfile, type CustomerOrder, type CustomerPreferences, type CustomerNotification } from '../lib/customerApi';
+import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, fetchCustomerPreferences, updateCustomerPreferences, fetchCustomerNotifications, markCustomerNotificationsRead, type CustomerProfile, type CustomerOrder, type CustomerPreferences, type CustomerNotification } from '../lib/customerApi';
 
 interface ProfilePageProps {
   customerInfo: {
@@ -128,6 +128,31 @@ export default function ProfilePage({
     }
   }, []);
 
+  const handleMarkAllRead = useCallback(async () => {
+    if (unreadCount === 0) return;
+    try {
+      await markCustomerNotificationsRead({ all: true });
+      setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })));
+      setUnreadCount(0);
+    } catch {
+      // Leave the badge alone if the server refused; the next load will resync.
+    }
+  }, [unreadCount]);
+
+  const handleMarkOneRead = useCallback(async (id: number) => {
+    const target = notifications.find((notification) => notification.id === id);
+    if (!target || target.read) return;
+    try {
+      await markCustomerNotificationsRead({ id });
+      setNotifications((prev) =>
+        prev.map((notification) => (notification.id === id ? { ...notification, read: true } : notification)),
+      );
+      setUnreadCount((prev) => Math.max(prev - 1, 0));
+    } catch {
+      // The row stays unread; retrying is harmless.
+    }
+  }, [notifications]);
+
   useEffect(() => {
     loadProfile();
     loadOrders();
@@ -150,7 +175,10 @@ export default function ProfilePage({
   const memberSince = profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('en-UG', { month: 'long', year: 'numeric' }) : '2024';
 
   const totalOrders = orders.length;
-  const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+  // Cancelled orders never took money, so they should not inflate "total spent".
+  const totalSpent = orders
+    .filter((order) => order.status !== 'cancelled')
+    .reduce((sum, order) => sum + (order.total || 0), 0);
   const activeOrders = orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
   const deliveredOrders = orders.filter(o => o.status === 'delivered');
 
@@ -175,10 +203,43 @@ export default function ProfilePage({
     return orders;
   }, [orders, orderFilter]);
 
+  /** Persists the Details tab form. The API returns the saved row, so the card
+   *  reflects what the server stored rather than what was typed. */
+  const handleSave = async () => {
+    setError(null);
+    try {
+      const saved = await updateCustomerProfile({
+        fullName: editedInfo.fullName.trim(),
+        phone: editedInfo.phone.trim(),
+        region: editedInfo.region.trim(),
+        district: editedInfo.district.trim(),
+        subCounty: editedInfo.subCounty.trim(),
+        parish: editedInfo.parish.trim(),
+        village: editedInfo.village.trim(),
+        address: editedInfo.address.trim(),
+      });
+      setProfile(saved);
+      onUpdateCustomerInfo({
+        fullName: saved.fullName,
+        phone: saved.phone,
+        region: saved.region,
+        district: saved.district || '',
+        subCounty: saved.subCounty || '',
+        parish: saved.parish || '',
+        village: saved.village || '',
+        address: saved.address,
+      });
+      setIsEditing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save profile');
+    }
+  };
+
   const handleSavePreferences = async () => {
     setSavingPreferences(true);
     try {
-      const prefs = preferences?.preferences || {};
       await updateCustomerPreferences({
         highlightVegan: (document.querySelector('[data-pref="highlightVegan"]') as HTMLInputElement)?.checked ?? false,
         farmNotifications: (document.querySelector('[data-pref="farmNotifications"]') as HTMLInputElement)?.checked ?? false,
@@ -277,21 +338,33 @@ export default function ProfilePage({
             <div className="absolute right-0 top-[52px] w-[320px] bg-white border border-neutral-200 rounded-xl shadow-lg z-50 max-h-[400px] overflow-y-auto">
               <div className="p-3 border-b border-neutral-100 flex items-center justify-between">
                 <h3 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000]">Notifications</h3>
-                <button
-                  onClick={() => setShowNotifications(false)}
-                  className="text-[#757575] hover:text-[#000000] text-[12px]"
-                >
-                  Close
-                </button>
+                <div className="flex items-center gap-3">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[#426b1f] hover:underline text-[12px] font-medium"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowNotifications(false)}
+                    className="text-[#757575] hover:text-[#000000] text-[12px]"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
               {notifications.length === 0 ? (
                 <div className="p-4 text-center text-[#757575] text-[13px]">No notifications yet</div>
               ) : (
                 <div className="divide-y divide-neutral-100">
                   {notifications.map((notification) => (
-                    <div
+                    <button
                       key={notification.id}
-                      className={`p-3 ${notification.read ? 'bg-white' : 'bg-[#426b1f]/5'}`}
+                      type="button"
+                      onClick={() => handleMarkOneRead(notification.id)}
+                      className={`w-full text-left p-3 transition-colors hover:bg-neutral-50 ${notification.read ? 'bg-white' : 'bg-[#426b1f]/5'}`}
                     >
                       <div className="flex items-start gap-2">
                         <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${notification.read ? 'bg-transparent' : 'bg-[#426b1f]'}`} />
@@ -303,7 +376,7 @@ export default function ProfilePage({
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

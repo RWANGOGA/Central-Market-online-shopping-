@@ -33,6 +33,9 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/mu_katale}
       - UPLOAD_DIR=/app/data/uploads
       - TRUST_PROXY=true
+      # Required at boot by lib/env; fail fast rather than compare signatures
+      # against an empty key.
+      - PAYMENT_WEBHOOK_SECRET=${PAYMENT_WEBHOOK_SECRET:?set PAYMENT_WEBHOOK_SECRET}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - ADMIN_NAME=${ADMIN_NAME:-}

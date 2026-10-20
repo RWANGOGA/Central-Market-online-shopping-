@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, queryRows } from '@/db';
-import { products, stockMovements } from '@/db/schema';
+import { notifications, products, stockMovements } from '@/db/schema';
 import { LOW_STOCK_THRESHOLD, describeStock, stockState } from './stock';
 import { StockConflict } from './stockErrors';
 
@@ -94,14 +94,29 @@ export async function recordMovement(
 
   const threshold = updated.lowStockThreshold ?? LOW_STOCK_THRESHOLD;
 
+  const previousStock = updated.stock - delta;
+  const previousState = stockState(previousStock, threshold);
+  const nextState = stockState(updated.stock, threshold);
+
+  // Alert once, on the crossing into low or out. Writing it in the same
+  // transaction as the movement means an alert can never describe stock that
+  // was rolled back.
+  if (nextState !== 'in_stock' && previousState === 'in_stock') {
+    await executor.insert(notifications).values({
+      type: 'stock',
+      title: nextState === 'out' ? `Out of stock: ${updated.name}` : `Low stock: ${updated.name}`,
+      message: `${updated.name} is at ${updated.stock}${updated.unit}. The reorder level is ${threshold}.`,
+    });
+  }
+
   return {
     productId,
-    previous: updated.stock - delta,
+    previous: previousStock,
     stock: updated.stock,
     delta,
     reason,
     threshold,
-    state: stockState(updated.stock, threshold),
+    state: nextState,
     remaining: describeStock(updated.stock, updated.unit, threshold),
     unit: updated.unit,
   };
