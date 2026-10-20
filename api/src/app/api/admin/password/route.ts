@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { admins } from '@/db/schema';
@@ -21,7 +22,7 @@ export async function PATCH(request: Request) {
   const { currentPassword, newPassword } = parsed.data;
 
   const existing = await db.query.admins.findFirst({
-    where: (t) => t.id === admin.id,
+    where: eq(admins.id, admin.id),
   });
   if (!existing) return error('Admin account not found', 404);
 
@@ -33,7 +34,7 @@ export async function PATCH(request: Request) {
   const [updated] = await db
     .update(admins)
     .set({ passwordHash })
-    .where((t) => t.id === admin.id)
+    .where(eq(admins.id, admin.id))
     .returning();
 
   await recordActivity({
