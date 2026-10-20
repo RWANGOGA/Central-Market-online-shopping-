@@ -13,10 +13,9 @@ import { requireCart } from '@/lib/cartOwnership';
 import { hashToken, trackingCookie } from '@/lib/customerAuth';
 import { allow } from '@/lib/rateLimit';
 import { getClientIp } from '@/lib/clientIp';
+import { priceCart } from '@/lib/pricing';
 
-const SHIPPING_FLAT_RATE = 23720;
-const FREE_SHIPPING_THRESHOLD = 198000;
-const TAX_RATE = 0.0825;
+
 
 function makeReference() {
   return `GRC-${randomBytes(5).toString('hex').toUpperCase()}`;
@@ -90,9 +89,8 @@ export async function POST(request: Request) {
       if (inactive) throw new Error(`PRODUCT_INACTIVE:${inactive.name}`);
 
       const subtotal = items.reduce((sum, item) => sum + item.priceValue * item.quantity, 0);
-      const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
-      const tax = Math.round(subtotal * TAX_RATE);
-      const total = subtotal + shipping + tax;
+      const pricing = priceCart(subtotal);
+      const { shipping, tax, total } = pricing;
 
       for (const item of items) {
         try {

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { cartItems, carts, products } from '@/db/schema';
+import { priceCart } from '@/lib/pricing';
 
 export type CartDto = Awaited<ReturnType<typeof loadCart>>;
 
@@ -17,6 +18,7 @@ export async function loadCart(cartId: number) {
       priceLabel: products.priceLabel,
       priceValue: products.priceValue,
       stock: products.stock,
+      imageFiles: products.imageFiles,
     })
     .from(cartItems)
     .innerJoin(products, eq(products.id, cartItems.productId))
@@ -26,6 +28,7 @@ export async function loadCart(cartId: number) {
     ...item,
     lineTotal: item.priceValue * item.quantity,
   }));
+  const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
 
   return {
     id: cart.id,
@@ -33,6 +36,6 @@ export async function loadCart(cartId: number) {
     status: cart.status,
     items: lines,
     itemCount: lines.reduce((sum, line) => sum + line.quantity, 0),
-    subtotal: lines.reduce((sum, line) => sum + line.lineTotal, 0),
+    ...priceCart(subtotal),
   };
 }
