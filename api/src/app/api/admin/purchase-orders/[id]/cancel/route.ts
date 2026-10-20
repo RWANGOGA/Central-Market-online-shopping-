@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { purchaseOrders } from '@/db/schema';
 import { requireRole } from '@/lib/adminAuth';
@@ -30,11 +30,27 @@ export async function PATCH(request: Request, { params }: Ctx) {
     );
   }
 
+  // Compare-and-set against the status that was read. Receiving and cancelling
+  // race here: whoever writes first wins, and the loser gets a 409 instead of
+  // overwriting a delivery that has already moved stock.
   const [updated] = await db
     .update(purchaseOrders)
     .set({ status: 'cancelled' })
-    .where(eq(purchaseOrders.id, order.id))
+    .where(
+      and(
+        eq(purchaseOrders.id, order.id),
+        eq(purchaseOrders.status, order.status),
+        inArray(purchaseOrders.status, ['draft', 'sent']),
+      ),
+    )
     .returning();
+
+  if (!updated) {
+    return error(
+      `Purchase order ${order.reference} changed while you were working on it. Reload and check its status.`,
+      409,
+    );
+  }
 
   await recordActivity({
     action: 'purchase_order.cancel',

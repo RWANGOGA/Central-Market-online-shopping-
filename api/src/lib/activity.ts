@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { and, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { adminActivityLog, admins, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
@@ -10,6 +10,7 @@ export type ActivityAction =
   | 'product.restore'
   | 'product.price_history'
   | 'order.status'
+  | 'order.sweep'
   | 'inventory.adjust'
   | 'purchase_order.create'
   | 'purchase_order.receive'
@@ -38,10 +39,7 @@ export async function recordActivity(input: ActivityInput) {
     adminId: input.adminId ?? null,
   };
 
-  await db.insert(adminActivityLog).values({
-    ...payload,
-    changedByEmail: input.adminEmail ?? null,
-  } as typeof adminActivityLog.$inferInsert);
+  await db.insert(adminActivityLog).values(payload);
 }
 
 export async function listActivity(filters: {
@@ -76,7 +74,7 @@ export async function listActivity(filters: {
     })
     .from(adminActivityLog)
     .leftJoin(admins, sql`${admins.id} = ${adminActivityLog.adminId}`)
-    .where(where.length > 0 ? sql`${where[0]} ${where.slice(1)}` : undefined)
+    .where(where.length > 0 ? and(...where) : undefined)
     .orderBy(sql`${adminActivityLog.createdAt} DESC, ${adminActivityLog.id} DESC`)
     .limit(limit)
     .offset(offset);
@@ -84,7 +82,7 @@ export async function listActivity(filters: {
   const totalRow = await db
     .select({ total: sql<number>`count(*)` })
     .from(adminActivityLog)
-    .where(where.length > 0 ? sql`${where[0]} ${where.slice(1)}` : undefined);
+    .where(where.length > 0 ? and(...where) : undefined);
 
   return { rows, total: Number(totalRow[0]?.total ?? 0) };
 }

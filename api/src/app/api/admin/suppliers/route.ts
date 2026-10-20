@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { products, suppliers } from '@/db/schema';
@@ -83,25 +83,38 @@ export async function PUT(request: Request) {
   const admin = await requireAdmin(request);
   if (!admin) return error('Not signed in', 401);
 
+  // The body can only be read once; parsing it twice is why this endpoint
+  // used to fail every time.
+  const body = await request.json().catch(() => null);
   const parsed = z
-    .object({ supplierId: z.number().int().positive() })
-    .safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return error('A supplierId is required', 422);
+    .object({
+      supplierId: z.number().int().positive(),
+      productIds: z.array(z.number().int().positive()).max(500).default([]),
+    })
+    .strict()
+    .safeParse(body);
+  if (!parsed.success) {
+    return error(parsed.error.issues[0]?.message ?? 'A supplierId and productIds are required', 422);
+  }
 
   const supplier = await db.query.suppliers.findFirst({
     where: eq(suppliers.id, parsed.data.supplierId),
   });
   if (!supplier) return error(`Supplier ${parsed.data.supplierId} not found`, 404);
 
-  const { productIds } = z
-    .object({ productIds: z.array(z.number().int().positive()).default([]) })
-    .parse(await request.json());
+  const productIds = [...new Set(parsed.data.productIds)];
+  if (productIds.length > 0) {
+    const found = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(inArray(products.id, productIds));
+    const foundIds = new Set(found.map((row) => row.id));
+    const missing = productIds.filter((id) => !foundIds.has(id));
+    if (missing.length > 0) {
+      return error(`These products do not exist: ${missing.join(', ')}`, 422);
+    }
 
-  for (const productId of productIds) {
-    await db
-      .update(products)
-      .set({ supplierId: supplier.id })
-      .where(eq(products.id, productId));
+    await db.update(products).set({ supplierId: supplier.id }).where(inArray(products.id, productIds));
   }
 
   return json({ data: { supplier, linked: productIds }, meta: { updatedBy: admin.email } });

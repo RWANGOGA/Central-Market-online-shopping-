@@ -15,6 +15,7 @@ import { hashToken, trackingCookie } from '@/lib/customerAuth';
 import { allow } from '@/lib/rateLimit';
 import { getClientIp } from '@/lib/clientIp';
 import { priceCart } from '@/lib/pricing';
+import { createCustomerNotification } from '@/lib/notifications';
 
 
 
@@ -177,6 +178,17 @@ export async function POST(request: Request) {
     region: created.region, district: created.district, customerName: created.customerName,
     at: created.createdAt,
   });
+
+  // Stock is reserved now, so the order is real even before payment. Signed-in
+  // customers get an inbox entry; guests track by reference.
+  if (created.customerId) {
+    await createCustomerNotification({
+      customerId: created.customerId,
+      type: 'order',
+      title: 'Order received',
+      message: `Order ${created.reference} was received. Complete payment to start fulfilment.`,
+    });
+  }
 
   return json({
     data: { id: created.id, reference: created.reference, status: created.status, total: created.total, currency: created.currency },

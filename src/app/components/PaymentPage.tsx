@@ -18,18 +18,18 @@ interface PaymentPageProps {
   cartCount: number;
   /** Server cart id, required to price the intent. */
   cartId: number | null;
+  /** The order created at checkout; the intent is created against it. */
+  orderReference: string | null;
   customerName: string;
   onBack: () => void;
   onMenuClick: () => void;
-  onProceedToConfirmation: (reference: string) => void;
+  onProceedToConfirmation: () => void;
 }
-
-type CardDetails = { number: string; expiry: string; ccv: string };
 
 const CHANNELS: { id: PaymentChannel; label: string; blurb: string }[] = [
   { id: 'mobile_money', label: 'Mobile Money', blurb: 'MTN, Airtel or UTel' },
-  { id: 'card', label: 'Card', blurb: 'Visa or Mastercard' },
   { id: 'wallet', label: 'Wallet', blurb: 'Bank or mobile wallet' },
+  { id: 'cod', label: 'Cash on delivery', blurb: 'Pay the rider' },
 ];
 
 const STAGES = ['details', 'approval', 'done'] as const;
@@ -38,6 +38,7 @@ type Stage = (typeof STAGES)[number];
 export default function PaymentPage({
   cartCount,
   cartId,
+  orderReference,
   customerName,
   onBack,
   onMenuClick,
@@ -50,7 +51,6 @@ export default function PaymentPage({
   const [provider, setProvider] = useState<string>('');
   const [phone, setPhone] = useState('');
   const [walletId, setWalletId] = useState('');
-  const [card, setCard] = useState<CardDetails>({ number: '', expiry: '', ccv: '' });
 
   const [stage, setStage] = useState<Stage>('details');
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
@@ -88,20 +88,19 @@ export default function PaymentPage({
   const phoneValid = isValidUgandanPhone(phone);
 
   const isFormValid = useMemo(() => {
+    // Cash on delivery has no instrument to validate.
+    if (channel === 'cod') return true;
     if (!provider) return false;
     if (channel === 'mobile_money') return phoneValid;
-    if (channel === 'card') {
-      return card.number.replace(/\D/g, '').length >= 12 && /^\d{2}\/\d{2}$/.test(card.expiry) && /^\d{3,4}$/.test(card.ccv);
-    }
     return walletId.trim().length >= 3;
-  }, [provider, channel, phoneValid, card, walletId]);
+  }, [provider, channel, phoneValid, walletId]);
 
   const handlePay = async () => {
     if (!isFormValid || busy) return;
 
-    if (cartId === null) {
+    if (cartId === null || !orderReference) {
       setError(
-        'No active basket was found on the server, so the amount cannot be verified. Add an item and try again.',
+        'No order was found for this basket, so the amount cannot be verified. Return to checkout and try again.',
       );
       return;
     }
@@ -111,12 +110,13 @@ export default function PaymentPage({
 
     const result = await createPaymentIntent({
       cartId,
+      orderReference,
       channel,
-      provider,
+      // Cash on delivery has no external provider.
+      provider: channel === 'cod' ? 'cash' : provider,
       payerName: customerName || undefined,
       payerPhone: channel === 'mobile_money' ? (normalizeUgandanPhone(phone) ?? phone) : undefined,
       walletId: channel === 'wallet' ? walletId.trim() : undefined,
-      card: channel === 'card' ? card : undefined,
     });
 
     setBusy(false);
@@ -130,16 +130,23 @@ export default function PaymentPage({
       return;
     }
 
-    setIntent(result.data.data);
+    const created = result.data.data;
+    setIntent(created);
     // Kept for the approval step; the server issues it once and never returns
-    // it again.
-    setSettlementToken(result.data.data.settlementToken);
+    // it again. Absent in production, where only the gateway may settle.
+    setSettlementToken(created.settlementToken ?? '');
     setTotals(result.data.totals ?? null);
-    setStage('approval');
+    // Cash on delivery is confirmed at checkout: the order is already
+    // processing and there is no approval prompt to show.
+    setStage(channel === 'cod' ? 'done' : 'approval');
   };
 
   const confirmPayment = async () => {
     if (!intent || busy) return;
+    if (!settlementToken) {
+      setError('This payment is settled by the provider. Refresh in a moment to see the result.');
+      return;
+    }
     setBusy(true);
 
     const result = await settlePaymentIntent(intent.reference, settlementToken, 'succeeded');
@@ -161,6 +168,10 @@ export default function PaymentPage({
 
   const cancelPayment = async () => {
     if (!intent || busy) return;
+    if (!settlementToken) {
+      setStage('details');
+      return;
+    }
     setBusy(true);
     await settlePaymentIntent(intent.reference, settlementToken, 'cancelled', 'Cancelled by the customer');
     setBusy(false);
@@ -287,47 +298,15 @@ export default function PaymentPage({
                 </Field>
               )}
 
-              {channel === 'card' && (
-                <div className="space-y-3">
-                  <Field label="Card number">
-                    <Input
-                      value={card.number}
-                      onChange={(e) =>
-                        setCard((c) => ({
-                          ...c,
-                          number: formatCardNumber(e.target.value),
-                        }))
-                      }
-                      inputMode="numeric"
-                      placeholder="1234 5678 9012 3456"
-                      className="bg-white border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px]"
-                    />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="Expiry">
-                      <Input
-                        value={card.expiry}
-                        onChange={(e) => setCard((c) => ({ ...c, expiry: formatExpiry(e.target.value) }))}
-                        inputMode="numeric"
-                        placeholder="MM/YY"
-                        className="bg-white border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px]"
-                      />
-                    </Field>
-                    <Field label="CVV">
-                      <Input
-                        value={card.ccv}
-                        onChange={(e) =>
-                          setCard((c) => ({
-                            ...c,
-                            ccv: e.target.value.replace(/\D/g, '').slice(0, 4),
-                          }))
-                        }
-                        inputMode="numeric"
-                        placeholder="123"
-                        className="bg-white border border-neutral-200 rounded-lg px-4 py-2 w-full font-['Inter:Regular',_sans-serif] text-[16px]"
-                      />
-                    </Field>
-                  </div>
+              {channel === 'cod' && (
+                <div className="rounded-xl border border-neutral-200 p-4 space-y-1">
+                  <p className="text-[14px] font-['Inter:Medium',_sans-serif] text-[#000000]">
+                    Pay when your order arrives
+                  </p>
+                  <p className="text-[12px] leading-[18px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+                    The rider collects the total in cash. Your order is confirmed immediately and
+                    the items are reserved for you.
+                  </p>
                 </div>
               )}
 
@@ -353,14 +332,15 @@ export default function PaymentPage({
             <>
               <div className="rounded-xl border border-[#426b1f]/25 bg-[#426b1f]/5 p-4 space-y-2">
                 <p className="text-[11px] uppercase tracking-wider font-semibold text-[#426b1f]">
-                  {intent.nextAction.ussd ? `Dial ${intent.nextAction.ussd}` : 'Awaiting approval'}
+                  {intent.nextAction?.ussd ? `Dial ${intent.nextAction.ussd}` : 'Awaiting approval'}
                 </p>
                 <p className="text-[14px] leading-[20px] font-['Inter:Regular',_sans-serif] text-[#000000]">
-                  {intent.nextAction.instructions}
+                  {intent.nextAction?.instructions ??
+                    'Approve the request on your phone. The order moves on once the provider confirms.'}
                 </p>
-                {intent.payerPhone && (
+                {intent.channel === 'mobile_money' && phone && (
                   <p className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">
-                    Requested from {intent.payerPhone}
+                    Requested from {normalizeUgandanPhone(phone) ?? phone}
                   </p>
                 )}
                 {intent.maskedCard && (
@@ -378,8 +358,9 @@ export default function PaymentPage({
                   <Row label="Subtotal" value={formatUgx(totals.subtotal)} />
                   <Row
                     label="Delivery"
-                    value={totals.delivery === 0 ? 'Free' : formatUgx(totals.delivery)}
+                    value={totals.shipping === 0 ? 'Free' : formatUgx(totals.shipping)}
                   />
+                  {totals.tax > 0 && <Row label="Tax" value={formatUgx(totals.tax)} />}
                   <div className="border-t border-neutral-100 pt-1.5 mt-1.5">
                     <Row label="Total" value={formatUgx(totals.total)} strong />
                   </div>
@@ -389,13 +370,20 @@ export default function PaymentPage({
               {error && <Notice tone="error">{error}</Notice>}
 
               <div className="space-y-2">
-                <button
-                  onClick={confirmPayment}
-                  disabled={busy}
-                  className="w-full bg-[#426b1f] text-white rounded-lg py-3 text-[14px] font-['Inter:Medium',_sans-serif] disabled:opacity-60"
-                >
-                  {busy ? 'Confirming…' : 'I have approved the payment'}
-                </button>
+                {settlementToken ? (
+                  <button
+                    onClick={confirmPayment}
+                    disabled={busy}
+                    className="w-full bg-[#426b1f] text-white rounded-lg py-3 text-[14px] font-['Inter:Medium',_sans-serif] disabled:opacity-60"
+                  >
+                    {busy ? 'Confirming…' : 'I have approved the payment'}
+                  </button>
+                ) : (
+                  <Notice tone="success">
+                    Waiting for {intent.provider} to confirm. This payment is settled by the
+                    provider, so the order moves on as soon as the confirmation arrives.
+                  </Notice>
+                )}
                 <button
                   onClick={cancelPayment}
                   disabled={busy}
@@ -410,16 +398,21 @@ export default function PaymentPage({
           {stage === 'done' && intent && (
             <div className="space-y-3">
               <Notice tone="success">
-                {formatUgx(intent.amount)} received by {intent.provider}.
+                {intent.channel === 'cod'
+                  ? `${formatUgx(intent.amount)} is due on delivery. Your order is confirmed.`
+                  : `${formatUgx(intent.amount)} received by ${intent.provider}.`}
               </Notice>
               <dl className="rounded-xl border border-neutral-200 p-4 space-y-1.5">
                 <Row label="Channel" value={intent.provider} />
+                {orderReference && <Row label="Order" value={orderReference} />}
                 <Row label="Reference" value={intent.reference} />
-                {intent.payerPhone && <Row label="Number" value={intent.payerPhone} />}
+                {intent.channel === 'mobile_money' && phone && (
+                  <Row label="Number" value={normalizeUgandanPhone(phone) ?? phone} />
+                )}
                 {intent.maskedCard && <Row label="Card" value={intent.maskedCard} />}
               </dl>
               <button
-                onClick={() => onProceedToConfirmation(intent.reference)}
+                onClick={onProceedToConfirmation}
                 className="w-full bg-[#426b1f] text-white rounded-lg py-3 text-[14px] font-['Inter:Medium',_sans-serif]"
               >
                 Continue to confirmation
@@ -433,24 +426,18 @@ export default function PaymentPage({
         <Footer
           isFormValid={isFormValid && !methodsError}
           busy={busy}
-          label={cartId === null ? 'Basket unavailable' : 'Pay now'}
+          label={
+            cartId === null || !orderReference
+              ? 'Order unavailable'
+              : channel === 'cod'
+                ? 'Place order'
+                : 'Pay now'
+          }
           onPay={handlePay}
         />
       )}
     </div>
   );
-}
-
-function formatCardNumber(value: string) {
-  return value
-    .replace(/\D/g, '')
-    .replace(/(\d{4})(?=\d)/g, '$1 ')
-    .slice(0, 19);
-}
-
-function formatExpiry(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 4);
-  return digits.length >= 3 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {

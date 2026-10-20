@@ -1,6 +1,7 @@
-import { eq, desc, sql, and } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '@/db';
-import { notifications, nowText } from '@/db/schema';
+import { notifications } from '@/db/schema';
 import { getCurrentCustomer } from '@/lib/customerSession';
 import { error, json } from '@/lib/http';
 
@@ -12,13 +13,18 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const unreadOnly = url.searchParams.get('unreadOnly') === 'true';
-  const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 100);
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 100);
 
-  const query = unreadOnly
-    ? db.select().from(notifications).where(and(eq(notifications.customerId, customer.id), eq(notifications.read, false))).orderBy(desc(notifications.createdAt)).limit(limit)
-    : db.select().from(notifications).where(eq(notifications.customerId, customer.id)).orderBy(desc(notifications.createdAt)).limit(limit);
+  const where = unreadOnly
+    ? and(eq(notifications.customerId, customer.id), eq(notifications.read, false))
+    : eq(notifications.customerId, customer.id);
 
-  const rows = await query;
+  const rows = await db
+    .select()
+    .from(notifications)
+    .where(where)
+    .orderBy(desc(notifications.createdAt))
+    .limit(limit);
 
   const unreadCountRow = await db
     .select({ count: sql<number>`count(*)` })
@@ -32,4 +38,40 @@ export async function GET(request: Request) {
       unread: Number(unreadCountRow[0]?.count ?? 0),
     },
   });
+}
+
+const markSchema = z
+  .object({
+    id: z.number().int().positive().optional(),
+    all: z.boolean().optional(),
+  })
+  .strict();
+
+/**
+ * Mark one notification, or every unread one, as read.
+ *
+ * The customer id is always part of the WHERE clause, so a customer cannot
+ * clear somebody else's inbox by guessing an id.
+ */
+export async function PATCH(request: Request) {
+  const customer = await getCurrentCustomer(request);
+  if (!customer) return error('Not signed in', 401);
+
+  const parsed = markSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success || (!parsed.data.all && parsed.data.id === undefined)) {
+    return error('Send { "id": number } or { "all": true }', 422);
+  }
+
+  const mine = eq(notifications.customerId, customer.id);
+  const where = parsed.data.all
+    ? and(mine, eq(notifications.read, false))
+    : and(mine, eq(notifications.id, parsed.data.id!));
+
+  const updated = await db
+    .update(notifications)
+    .set({ read: true })
+    .where(where)
+    .returning({ id: notifications.id });
+
+  return json({ data: { updated: updated.length } });
 }

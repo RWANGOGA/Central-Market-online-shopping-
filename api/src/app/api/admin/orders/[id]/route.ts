@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
@@ -8,6 +8,7 @@ import { ORDER_FLOW, allowedNext, canTransition, isOrderStatus } from '@/lib/ord
 import { error, json } from '@/lib/http';
 import { publishOrderEvent } from '@/lib/orderEvents';
 import { recordActivity } from '@/lib/activity';
+import { createCustomerNotification } from '@/lib/notifications';
 
 /**
  * Staff order detail and fulfilment.
@@ -93,18 +94,38 @@ export async function PATCH(request: Request, { params }: Ctx) {
     );
   }
 
+  // Payment gates fulfilment. Stock is reserved when the order is placed, so a
+  // pending order is goods held for someone who has not paid yet; staff must
+  // not start picking it on the strength of the order existing.
+  if (existing.status === 'pending' && status === 'processing') {
+    const paid = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(
+        and(eq(payments.orderId, existing.id), inArray(payments.status, ['succeeded', 'cod'])),
+      )
+      .limit(1);
+    if (paid.length === 0) {
+      return error('This order has not been paid. Take payment before starting fulfilment.', 409);
+    }
+  }
+
   // Cancelling hands the goods back, so stock returns. It goes through the
   // ledger with a reference to this order rather than being written to
   // products.stock directly, which is what keeps SUM(delta) equal to the cached
   // figure. Anything already delivered cannot be returned.
   const returningStock = status === 'cancelled' && existing.status !== 'delivered';
 
-  const [updated] = await db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
+    // Compare-and-set: the expected status is in the WHERE clause, so a
+    // request racing this one loses instead of applying the transition (and
+    // returning the stock) a second time.
     const [row] = await tx
       .update(orders)
       .set({ status, updatedAt: nowText })
-      .where(eq(orders.id, existing.id))
+      .where(and(eq(orders.id, existing.id), eq(orders.status, existing.status)))
       .returning();
+    if (!row) return null;
 
     await tx.insert(orderStatusEvents).values({
       orderId: row.id,
@@ -132,8 +153,35 @@ export async function PATCH(request: Request, { params }: Ctx) {
       }
     }
 
-    return [row];
+    // An order that is cancelled settles no money: any attempt still in flight
+    // is closed so the dashboard does not show a payment awaiting approval on
+    // a dead order.
+    if (status === 'cancelled') {
+      await tx
+        .update(payments)
+        .set({
+          status: 'cancelled',
+          failureReason: 'Order cancelled',
+          settlementTokenHash: null,
+          updatedAt: nowText,
+        })
+        .where(
+          and(
+            eq(payments.orderId, row.id),
+            inArray(payments.status, ['pending', 'awaiting_approval', 'processing']),
+          ),
+        );
+    }
+
+    return row;
   });
+
+  if (!updated) {
+    return error(
+      'This order changed while you were working on it. Reload and check its current status.',
+      409,
+    );
+  }
 
   await recordActivity({
     action: 'order.status',
@@ -165,6 +213,27 @@ export async function PATCH(request: Request, { params }: Ctx) {
     customerName: updated.customerName,
     at: updated.updatedAt,
   });
+
+  // Signed-in customers hear about the change in their inbox. Guest orders
+  // have no customerId and are tracked by reference instead.
+  if (updated.customerId) {
+    await createCustomerNotification({
+      customerId: updated.customerId,
+      type: 'order',
+      title:
+        status === 'cancelled'
+          ? 'Order cancelled'
+          : status === 'delivered'
+            ? 'Order delivered'
+            : status === 'shipped'
+              ? 'Order on its way'
+              : 'Order update',
+      message:
+        status === 'cancelled'
+          ? `Order ${updated.reference} was cancelled. Any stock held for it has been returned.`
+          : `Order ${updated.reference} is now ${status}.`,
+    });
+  }
 
   return json({
     data: { ...updated, timeline, nextStatuses: allowedNext(updated.status) },

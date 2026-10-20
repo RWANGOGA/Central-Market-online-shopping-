@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, resetCart } from './cartApi';
+import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, startFreshCart, CartError } from './cartApi';
 import { fetchStock, applyStockDelta, type StockLevel } from './stockApi';
 import { useCatalogue, type CatalogueProduct } from './catalogue';
 
@@ -310,37 +310,62 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     if (!targetProduct) return;
 
+    const product = targetProduct;
+    const wasInCart = cartItems.some((item) => item.id === product.id);
+
     setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === targetProduct!.id);
+      const existingItem = prevItems.find((item) => item.id === product.id);
 
       if (existingItem) {
         return prevItems.map((item) =>
-          item.id === targetProduct!.id
+          item.id === product.id
             ? { ...item, quantity: item.quantity + quantityToAdd }
             : item
         );
       } else {
-        return [...prevItems, buildCartItem(targetProduct!, quantityToAdd)];
+        return [...prevItems, buildCartItem(product, quantityToAdd)];
       }
     });
 
-    showAddToCartOverlay(targetProduct!, quantityToAdd);
+    showAddToCartOverlay(product, quantityToAdd);
 
-    // Sync to the API. The local update above already happened, so a failure
-    // here degrades to an unsynced cart rather than a broken interaction.
+    // Sync to the API. A network failure keeps the optimistic line (the cart
+    // works offline), but a refusal means the server's stock or cart state is
+    // authoritative and the local edit must be undone.
+    const rollback = () => {
+      setCartItems((prevItems) => {
+        if (!wasInCart) return prevItems.filter((item) => item.id !== product.id);
+        return prevItems
+          .map((item) =>
+            item.id === product.id
+              ? { ...item, quantity: item.quantity - quantityToAdd }
+              : item
+          )
+          .filter((item) => item.quantity > 0);
+      });
+    };
+
     const serverCartId = cartIdRef.current;
     if (serverCartId) {
-      apiAddItem(serverCartId, targetProduct!.id, quantityToAdd);
+      apiAddItem(serverCartId, product.id, quantityToAdd).catch((err) => {
+        if (err instanceof CartError) rollback();
+      });
     } else {
       resolveCartId().then((id) => {
         cartIdRef.current = id;
         setCartId(id);
-        if (id) apiAddItem(id, targetProduct!.id, quantityToAdd);
+        if (id) {
+          apiAddItem(id, product.id, quantityToAdd).catch((err) => {
+            if (err instanceof CartError) rollback();
+          });
+        }
       });
     }
   };
 
   const updateCartItemQuantity = (productId: number, quantity: number) => {
+    const previous = cartItems.find((item) => item.id === productId);
+
     if (quantity === 0) {
       setCartItems((prevItems) => prevItems.filter((item) => item.id !== productId));
     } else {
@@ -353,11 +378,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const serverCartId = cartIdRef.current;
     if (serverCartId) {
-      updateItem(serverCartId, productId, quantity);
+      updateItem(serverCartId, productId, quantity).catch((err) => {
+        if (!(err instanceof CartError)) return;
+        setCartItems((prevItems) =>
+          previous
+            ? prevItems.some((item) => item.id === productId)
+              ? prevItems.map((item) =>
+                  item.id === productId ? { ...item, quantity: previous.quantity } : item
+                )
+              : [...prevItems, previous]
+            : prevItems.filter((item) => item.id !== productId)
+        );
+      });
     }
   };
 
-  const finalizePurchase = useCallback((serverCartId: number | null) => {
+  const finalizePurchase = useCallback((_serverCartId: number | null) => {
     setStockLevels((current) => {
       let next = current;
       for (const item of cartItems) {
@@ -366,12 +402,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return next;
     });
     setCartItems([]);
-    if (serverCartId) {
-      resetCart(serverCartId).then((id) => {
-        cartIdRef.current = id;
-        setCartId(id);
-      });
-    }
+    // The cart that became this order is `converted`; writing to it would be
+    // refused. A new cart is the only correct next state.
+    startFreshCart().then((id) => {
+      cartIdRef.current = id;
+      setCartId(id);
+    });
   }, [cartItems]);
 
   const value: CartContextType = {

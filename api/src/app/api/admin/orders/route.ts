@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { orderItems, orders, nowText } from '@/db/schema';
+import { orderItems, orders } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { ORDER_FLOW } from '@/lib/orderFlow';
 import { error, json } from '@/lib/http';

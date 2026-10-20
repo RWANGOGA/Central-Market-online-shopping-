@@ -28,7 +28,10 @@ import { recordActivity } from '@/lib/activity';
 const REASONS = ['adjustment', 'waste', 'return', 'correction', 'delivery'] as const;
 
 const patchSchema = z.object({
-  delta: z.number().int(),
+  // A single adjustment can never move more than ten thousand sale units in
+  // one go; anything larger is a typo or a bulk import that should not be done
+  // through a stock adjustment.
+  delta: z.number().int().min(-10_000).max(10_000),
   reason: z.enum(REASONS),
   note: z.string().max(300).optional(),
 });
@@ -46,6 +49,15 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
   const { delta, reason, note } = parsed.data;
   if (delta === 0) return error('delta must not be zero', 422);
+
+  // The reason and the sign must agree: waste removes stock, a delivery or a
+  // return adds it. Only a correction or a plain adjustment may go either way.
+  if (reason === 'waste' && delta > 0) {
+    return error('Waste is recorded as a negative delta.', 422);
+  }
+  if ((reason === 'delivery' || reason === 'return') && delta < 0) {
+    return error(`${reason === 'delivery' ? 'A delivery' : 'A return'} is recorded as a positive delta.`, 422);
+  }
 
   const { id } = await params;
   const key = Number(id);

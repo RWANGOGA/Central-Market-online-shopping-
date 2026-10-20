@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { productPriceHistory, products, nowText } from '@/db/schema';
 import { priceLabelFor, productUpdateSchema, requireAdmin } from '@/lib/catalogue';
@@ -68,7 +68,6 @@ export async function PATCH(request: Request, { params }: Ctx) {
   }
 
   const set: Partial<typeof products.$inferInsert> = {};
-  set.updatedAt = nowText as unknown as string;
 
   if (input.name !== undefined) set.name = input.name;
   if (input.slug !== undefined) set.slug = input.slug;
@@ -97,8 +96,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
     }
   }
 
-  const [updated] = await db.transaction(async (tx) => {
-    const [row] = await tx.update(products).set(set).where(eq(products.id, existing.id)).returning();
+  const updated = await db.transaction(async (tx) => {
+    // Compare-and-set on updatedAt: two staff editing the same product cannot
+    // silently overwrite each other, and a price history row is only written
+    // for a change that actually landed.
+    const [row] = await tx
+      .update(products)
+      .set({ ...set, updatedAt: nowText })
+      .where(and(eq(products.id, existing.id), eq(products.updatedAt, existing.updatedAt)))
+      .returning();
+    if (!row) return null;
 
     if (priceChanged || unitChanged) {
       await tx.insert(productPriceHistory).values({
@@ -111,8 +118,12 @@ export async function PATCH(request: Request, { params }: Ctx) {
       });
     }
 
-    return [row];
+    return row;
   });
+
+  if (!updated) {
+    return error('This product was modified by someone else. Please refresh and try again.', 409);
+  }
 
   await recordActivity({
     action: 'product.update',

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { purchaseOrderItems, purchaseOrders, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
@@ -53,6 +53,18 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   const received = await db.transaction(async (tx) => {
+    // Claim the purchase order before touching stock. The expected status is
+    // part of the WHERE clause, so two receivers racing, or a receive racing a
+    // cancel, cannot both win and bring the same delivery in twice.
+    const [claimed] = await tx
+      .update(purchaseOrders)
+      .set({ status: 'received', receivedAt: nowText })
+      .where(
+        and(eq(purchaseOrders.id, order.id), inArray(purchaseOrders.status, ['draft', 'sent'])),
+      )
+      .returning();
+    if (!claimed) return null;
+
     const applied = [];
 
     for (const line of lines) {
@@ -73,19 +85,21 @@ export async function POST(request: Request, { params }: Ctx) {
       );
     }
 
-    await tx
-      .update(purchaseOrders)
-      .set({ status: 'received', receivedAt: nowText })
-      .where(eq(purchaseOrders.id, order.id));
-
     return applied;
   });
+
+  if (!received) {
+    return error(
+      `Purchase order ${order.reference} was already received or cancelled. Reload and check its status.`,
+      409,
+    );
+  }
 
   await recordActivity({
     action: 'purchase_order.receive',
     entity: 'purchase_order',
     entityId: order.reference,
-    before: { status: 'sent' },
+    before: { status: order.status },
     after: { status: 'received', units: received.reduce((sum, movement) => sum + movement.delta, 0) },
     adminId: admin.id,
     adminEmail: admin.email,

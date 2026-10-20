@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { isValidUgandanPhone, normalizeUgandanPhone } from '../lib/uganda';
+import type { CustomerSession } from '../lib/authProvider';
 
 interface LoginPageProps {
   onBack: () => void;
-  onLogin: (customer: { id: number; fullName: string; phone: string }) => void;
+  onLogin: (customer: CustomerSession) => void;
   onNavigateToSignup: () => void;
 }
 

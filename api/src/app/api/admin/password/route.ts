@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { admins } from '@/db/schema';
+import { admins, adminSessions } from '@/db/schema';
 import { hashPassword, verifyPassword } from '@/lib/password';
-import { requireRole } from '@/lib/adminAuth';
+import { clearedCookie, requireRole } from '@/lib/adminAuth';
 import { error, json } from '@/lib/http';
 import { recordActivity } from '@/lib/activity';
 
@@ -37,6 +37,10 @@ export async function PATCH(request: Request) {
     .where(eq(admins.id, admin.id))
     .returning();
 
+  // A password change invalidates every outstanding session, including this
+  // one: if the old password leaked, whoever used it is signed out now.
+  await db.delete(adminSessions).where(eq(adminSessions.adminId, admin.id));
+
   await recordActivity({
     action: 'admin.password_change',
     entity: 'admin',
@@ -47,13 +51,16 @@ export async function PATCH(request: Request) {
     adminEmail: admin.email,
   });
 
-  return json({
-    data: {
-      id: updated.id,
-      email: updated.email,
-      name: updated.name,
-      role: updated.role,
+  return json(
+    {
+      data: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name,
+        role: updated.role,
+      },
+      meta: { changedBy: admin.email, signedOut: true },
     },
-    meta: { changedBy: admin.email },
-  });
+    { headers: { 'set-cookie': clearedCookie() } },
+  );
 }

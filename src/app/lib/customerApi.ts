@@ -75,9 +75,18 @@ export interface CustomerOrdersResult {
   };
 }
 
+export interface CustomerPreferenceFlags {
+  orderUpdates?: boolean;
+  farmNotifications?: boolean;
+  highlightVegan?: boolean;
+  reusablePackaging?: boolean;
+  promotions?: boolean;
+  [key: string]: unknown;
+}
+
 export interface CustomerPreferences {
   customerId: number;
-  preferences: Record<string, unknown>;
+  preferences: CustomerPreferenceFlags;
 }
 
 export interface CustomerNotification {
@@ -127,13 +136,19 @@ export async function updateCustomerProfile(updates: Partial<CustomerProfile>): 
   return data.data;
 }
 
-export async function fetchCustomerOrders(params?: { limit?: number; offset?: number }): Promise<CustomerOrdersResult> {
+export async function fetchCustomerOrders(params?: { limit?: number; offset?: number }): Promise<CustomerOrder[]> {
   const searchParams = new URLSearchParams();
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
   const qs = searchParams.toString();
-  const data = await request<{ data: CustomerOrdersResult }>(`/customers/me/orders${qs ? `?${qs}` : ''}`);
-  return data.data;
+  const body = await request<{ data: CustomerOrder[] }>(`/customers/me/orders${qs ? `?${qs}` : ''}`);
+  return body.data;
+}
+
+/** The signed-in customer, or null when the session cookie is absent or expired. */
+export async function fetchCustomerSession(): Promise<CustomerProfile | null> {
+  const body = await request<{ data: CustomerProfile | null }>('/customers/session');
+  return body.data;
 }
 
 export async function loginCustomer(phone: string, password: string): Promise<CustomerProfile> {
@@ -201,6 +216,16 @@ export async function fetchCustomerNotifications(params?: { unreadOnly?: boolean
   if (params?.unreadOnly) searchParams.set('unreadOnly', 'true');
   if (params?.limit) searchParams.set('limit', String(params.limit));
   const qs = searchParams.toString();
-  const data = await request<{ data: CustomerNotificationsResult }>(`/customers/notifications${qs ? `?${qs}` : ''}`);
-  return data.data;
+  // The endpoint answers with the whole { data, meta } envelope; both the rows
+  // and the unread count live at the top level.
+  return request<CustomerNotificationsResult>(`/customers/notifications${qs ? `?${qs}` : ''}`);
+}
+
+/** Mark one notification, or every unread one, as read. */
+export async function markCustomerNotificationsRead(input: { id?: number; all?: boolean }): Promise<number> {
+  const body = await request<{ data: { updated: number } }>('/customers/notifications', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return body.data.updated;
 }
