@@ -54,7 +54,7 @@ function OrderConfirmationRoute({ onMenuClick }: { onMenuClick: () => void }) {
     <OrderConfirmationPage
       cartCount={cartCount}
       customerInfo={customerInfo}
-      orderReference={reference}
+      orderReference={reference ?? null}
       onShop={() => navigate('/')}
       onMenuClick={onMenuClick}
     />
@@ -85,7 +85,24 @@ function PaymentRoute({ onMenuClick }: { onMenuClick: () => void }) {
   );
 }
 
+/**
+ * Providers must wrap every component that reads their context, and the router
+ * must wrap everything that calls useNavigate (including AuthProvider itself).
+ * The shell below is the first component that is allowed to use those hooks.
+ */
 export default function App() {
+  return (
+    <BrowserRouter>
+      <CartProvider>
+        <AuthProvider>
+          <AppShell />
+        </AuthProvider>
+      </CartProvider>
+    </BrowserRouter>
+  );
+}
+
+function AppShell() {
   const navigate = useNavigate();
   const [isNavOpen, setIsNavOpen] = useState(false);
   const openMenu = () => setIsNavOpen(true);
@@ -129,6 +146,7 @@ export default function App() {
       profile: '/profile',
       basket: '/basket',
       login: '/login',
+      staff: '/staff',
     };
     if (screen === 'profile' && !customerSession) {
       navigate('/login');
@@ -169,164 +187,148 @@ export default function App() {
   };
 
   return (
-    <BrowserRouter>
-      <CartProvider>
-        <AuthProvider>
-          <div className="min-h-dvh bg-[#f7f7f5] p-2 sm:p-4">
-            {/* Responsive shop shell: full width on small screens, bezel frame on md+. */}
-            <div className="max-w-[430px] mx-auto bg-[#ffffff] relative overflow-hidden rounded-[40px] shadow-2xl md:border-8 md:border-black md:rounded-[52px]">
-              <Routes>
-                <Route
-                  path="/"
-                  element={
-                    <ProductListPage
-                      products={products}
-                      favorites={favorites}
-                      searchTerm={searchTerm}
-                      sortOption={sortOption}
-                      cartCount={cartCount}
-                      onSearchChange={setSearchTerm}
-                      onSortChange={setSortOption}
-                      onToggleFavorite={toggleFavorite}
-                      onAddToCart={(productId) => addToCart(productId, 1)}
-                      onProductClick={(product) => navigate(`/product/${product.id}`)}
-                      onMenuClick={openMenu}
-                      onCartClick={() => navigate('/basket')}
-                      stockLevels={stockLevels}
-                      stockLive={stockLive}
-                    />
-                  }
-                />
-                <Route path="/product/:id" element={<ProductDetailRoute onMenuClick={openMenu} />} />
-                <Route
-                  path="/basket"
-                  element={
-                    <BasketPage
-                      cartItems={cartItems}
-                      onBack={() => navigate('/')}
-                      onMenuClick={openMenu}
-                      onUpdateQuantity={updateCartItemQuantity}
-                      onGoToCheckout={() => navigate('/checkout')}
-                      errorMessage={purchaseError}
-                    />
-                  }
-                />
-                <Route
-                  path="/checkout"
-                  element={
-                    <CheckoutPage
-                      cartCount={cartCount}
-                      customerInfo={customerInfo}
-                      onBack={() => navigate('/basket')}
-                      onMenuClick={openMenu}
-                      onProceedToPayment={handleProceedToPayment}
-                    />
-                  }
-                />
-                <Route
-                  path="/pay/:reference"
-                  element={<PaymentRoute onMenuClick={openMenu} />}
-                />
-                <Route path="/order/:reference" element={<OrderConfirmationRoute onMenuClick={openMenu} />} />
-                <Route
-                  path="/profile"
-                  element={
-                    <ProfilePage
-                      customerInfo={customerInfo}
-                      customerSession={customerSession}
-                      onUpdateCustomerInfo={setCustomerInfo}
-                      onBack={() => navigate('/')}
-                      onMenuClick={openMenu}
-                      onCartClick={() => navigate('/basket')}
-                      onLogout={logout}
-                      onShopClick={() => navigate('/')}
-                      cartCount={cartCount}
-                    />
-                  }
-                />
-                <Route
-                  path="/login"
-                  element={
-                    <LoginPage
-                      onBack={() => navigate('/')}
-                      onLogin={login}
-                      onNavigateToSignup={() => navigate('/signup')}
-                    />
-                  }
-                />
-                <Route
-                  path="/signup"
-                  element={
-                    <SignupPage
-                      onBack={() => navigate('/')}
-                      onSignup={() => navigate('/login')}
-                      onNavigateToLogin={() => navigate('/login')}
-                    />
-                  }
-                />
-                <Route
-                  path="/map"
-                  element={
-                    <MapPage
-                      cartCount={cartCount}
-                      initialDistrict={customerInfo.district}
-                      onBack={() => navigate('/')}
-                      onMenuClick={openMenu}
-                      onCartClick={() => navigate('/basket')}
-                      onUseAsDeliveryPlace={(name) => {
-                        setCustomerInfo({ ...customerInfo, district: name });
-                        navigate('/checkout');
-                      }}
-                    />
-                  }
-                />
-                <Route
-                  path="/news"
-                  element={
-                    <NewsstandPage
-                      onBack={() => navigate('/')}
-                      onMenuClick={openMenu}
-                      onCartClick={() => navigate('/basket')}
-                      cartCount={cartCount}
-                    />
-                  }
-                />
-                <Route
-                  path="/about"
-                  element={
-                    <AboutPage
-                      onBack={() => navigate('/')}
-                      onMenuClick={openMenu}
-                      onCartClick={() => navigate('/basket')}
-                      cartCount={cartCount}
-                    />
-                  }
-                />
-                <Route
-                  path="/staff"
-                  element={<AdminPage onClose={() => navigate('/')} />}
-                />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-
-              {/* Add to Cart Overlay */}
-              <AddToCartOverlay
-                isVisible={showOverlay}
-                product={overlayProduct}
-                quantity={overlayQuantity}
+    <div className="min-h-dvh bg-[#f7f7f5] p-2 sm:p-4">
+      {/* Responsive shop shell: full width on small screens, bezel frame on md+. */}
+      <div className="max-w-[430px] mx-auto bg-[#ffffff] relative overflow-hidden rounded-[40px] shadow-2xl md:border-8 md:border-black md:rounded-[52px]">
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <ProductListPage
+                products={products}
+                favorites={favorites}
+                searchTerm={searchTerm}
+                sortOption={sortOption}
+                cartCount={cartCount}
+                onSearchChange={setSearchTerm}
+                onSortChange={setSortOption}
+                onToggleFavorite={toggleFavorite}
+                onAddToCart={(productId) => addToCart(productId, 1)}
+                onProductClick={(product) => navigate(`/product/${product.id}`)}
+                onMenuClick={openMenu}
+                onCartClick={() => navigate('/basket')}
+                stockLevels={stockLevels}
+                stockLive={stockLive}
               />
-
-              {/* Custom Menu */}
-              <Menu
-                isOpen={isNavOpen}
-                onClose={() => setIsNavOpen(false)}
-                onNavigate={handleMenuNavigation}
-                isLoggedIn={!!customerSession}
+            }
+          />
+          <Route path="/product/:id" element={<ProductDetailRoute onMenuClick={openMenu} />} />
+          <Route
+            path="/basket"
+            element={
+              <BasketPage
+                cartItems={cartItems}
+                onBack={() => navigate('/')}
+                onMenuClick={openMenu}
+                onUpdateQuantity={updateCartItemQuantity}
+                onGoToCheckout={() => navigate('/checkout')}
+                errorMessage={purchaseError}
               />
-            </div>
-          </div>
-        </AuthProvider>
-      </CartProvider>
-    </BrowserRouter>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <CheckoutPage
+                cartCount={cartCount}
+                customerInfo={customerInfo}
+                onBack={() => navigate('/basket')}
+                onMenuClick={openMenu}
+                onProceedToPayment={handleProceedToPayment}
+              />
+            }
+          />
+          <Route path="/pay/:reference" element={<PaymentRoute onMenuClick={openMenu} />} />
+          <Route path="/order/:reference" element={<OrderConfirmationRoute onMenuClick={openMenu} />} />
+          <Route
+            path="/profile"
+            element={
+              <ProfilePage
+                customerInfo={customerInfo}
+                customerSession={customerSession}
+                onUpdateCustomerInfo={setCustomerInfo}
+                onBack={() => navigate('/')}
+                onMenuClick={openMenu}
+                onCartClick={() => navigate('/basket')}
+                onLogout={logout}
+                onShopClick={() => navigate('/')}
+                cartCount={cartCount}
+              />
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <LoginPage
+                onBack={() => navigate('/')}
+                onLogin={login}
+                onNavigateToSignup={() => navigate('/signup')}
+              />
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              <SignupPage
+                onBack={() => navigate('/')}
+                onSignup={() => navigate('/login')}
+                onNavigateToLogin={() => navigate('/login')}
+              />
+            }
+          />
+          <Route
+            path="/map"
+            element={
+              <MapPage
+                cartCount={cartCount}
+                initialDistrict={customerInfo.district}
+                onBack={() => navigate('/')}
+                onMenuClick={openMenu}
+                onCartClick={() => navigate('/basket')}
+                onUseAsDeliveryPlace={(name) => {
+                  setCustomerInfo({ ...customerInfo, district: name });
+                  navigate('/checkout');
+                }}
+              />
+            }
+          />
+          <Route
+            path="/news"
+            element={
+              <NewsstandPage
+                onBack={() => navigate('/')}
+                onMenuClick={openMenu}
+                onCartClick={() => navigate('/basket')}
+                cartCount={cartCount}
+              />
+            }
+          />
+          <Route
+            path="/about"
+            element={
+              <AboutPage
+                onBack={() => navigate('/')}
+                onMenuClick={openMenu}
+                onCartClick={() => navigate('/basket')}
+                cartCount={cartCount}
+              />
+            }
+          />
+          <Route path="/staff" element={<AdminPage onClose={() => navigate('/')} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+
+        {/* Add to Cart Overlay */}
+        <AddToCartOverlay isVisible={showOverlay} product={overlayProduct} quantity={overlayQuantity} />
+
+        {/* Custom Menu */}
+        <Menu
+          isOpen={isNavOpen}
+          onClose={() => setIsNavOpen(false)}
+          onNavigate={handleMenuNavigation}
+          isLoggedIn={!!customerSession}
+        />
+      </div>
+    </div>
   );
 }
