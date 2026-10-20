@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { db } from '@/db';
+import { db, queryRows } from '@/db';
 import { orderItems, orders, products, stockMovements } from '@/db/schema';
 
 export type Bucket = 'day' | 'week' | 'month';
@@ -7,17 +7,27 @@ export type Bucket = 'day' | 'week' | 'month';
 function bucketExpr(bucket: Bucket) {
   switch (bucket) {
     case 'day':
-      return sql`date(${orders.createdAt})`;
+      return sql<string>`substr(${orders.createdAt}, 1, 10)`;
     case 'week':
-      return sql`strftime('%Y-W', ${orders.createdAt})`;
+      return sql<string>`to_char(${orders.createdAt}::timestamp, 'IYYY-"W"IW')`;
     case 'month':
-      return sql`strftime('%Y-%m', ${orders.createdAt})`;
+      return sql<string>`substr(${orders.createdAt}, 1, 7)`;
   }
 }
 
-function bucketLabel(bucket: Bucket, value: string) {
-  if (bucket === 'week') return value;
-  return value;
+/** Units per order, aggregated before the join so order totals are not multiplied by line count. */
+const unitsPerOrder = sql`(SELECT order_id, SUM(quantity) AS units FROM order_items GROUP BY order_id) u`;
+
+/** Revenue counts only orders that were not cancelled and whose payment succeeded or is cash on delivery. */
+const countedOrder = sql`${orders.status} <> 'cancelled' AND EXISTS (
+  SELECT 1 FROM payments p WHERE p.order_id = ${orders.id} AND p.status IN ('succeeded', 'cod')
+)`;
+
+function dateRange(filters: { from?: string; to?: string }) {
+  const parts = [countedOrder];
+  if (filters.from) parts.push(sql`${orders.createdAt} >= ${filters.from}`);
+  if (filters.to) parts.push(sql`${orders.createdAt} <= ${filters.to}`);
+  return sql.join(parts, sql` AND `);
 }
 
 export async function salesTrend(filters: {
@@ -28,27 +38,23 @@ export async function salesTrend(filters: {
 }) {
   const bucket = filters.bucket ?? 'day';
   const limit = filters.limit ?? 60;
+  const b = bucketExpr(bucket);
 
-  const where = [];
-  if (filters.from) where.push(sql`${orders.createdAt} >= ${filters.from}`);
-  if (filters.to) where.push(sql`${orders.createdAt} <= ${filters.to}`);
-
-  const rows = await db
-    .select({
-      bucket: bucketExpr(bucket),
-      orders: sql<number>`count(*)`,
-      revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
-      units: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
-    })
-    .from(orders)
-    .leftJoin(orderItems, sql`${orderItems.orderId} = ${orders.id}`)
-    .where(where.length > 0 ? sql`${where[0]} ${where.slice(1)}` : undefined)
-    .groupBy(sql`${bucketExpr(bucket)}`)
-    .orderBy(sql`${bucketExpr(bucket)} DESC`)
-    .limit(limit);
+  const rows = await queryRows<{ bucket: string; orders: string; revenue: string; units: string }>(sql`
+    SELECT ${b} AS bucket,
+           count(*) AS orders,
+           coalesce(sum(${orders.total}), 0) AS revenue,
+           coalesce(sum(u.units), 0) AS units
+    FROM ${orders}
+    LEFT JOIN ${unitsPerOrder} ON u.order_id = ${orders.id}
+    WHERE ${dateRange(filters)}
+    GROUP BY 1
+    ORDER BY 1 DESC
+    LIMIT ${limit}
+  `);
 
   return rows.map((row) => ({
-    bucket: bucketLabel(bucket, String(row.bucket)),
+    bucket: String(row.bucket),
     orders: Number(row.orders),
     revenue: Number(row.revenue),
     units: Number(row.units),
@@ -58,11 +64,7 @@ export async function salesTrend(filters: {
 export async function productPerformance(filters: { from?: string; to?: string; limit?: number }) {
   const limit = filters.limit ?? 50;
 
-  const where = [];
-  if (filters.from) where.push(sql`${orders.createdAt} >= ${filters.from}`);
-  if (filters.to) where.push(sql`${orders.createdAt} <= ${filters.to}`);
-
-  const rows = await db
+    const rows = await db
     .select({
       productId: orderItems.productId,
       name: products.name,
@@ -74,8 +76,8 @@ export async function productPerformance(filters: { from?: string; to?: string; 
     .from(orderItems)
     .innerJoin(orders, sql`${orders.id} = ${orderItems.orderId}`)
     .innerJoin(products, sql`${products.id} = ${orderItems.productId}`)
-    .where(where.length > 0 ? sql`${where[0]} ${where.slice(1)}` : undefined)
-    .groupBy(orderItems.productId)
+    .where(dateRange(filters))
+    .groupBy(orderItems.productId, products.name, products.unit)
     .orderBy(sql`sum(${orderItems.lineTotal}) DESC`)
     .limit(limit);
 
@@ -90,26 +92,21 @@ export async function productPerformance(filters: { from?: string; to?: string; 
 }
 
 export async function regionalDemand(filters: { from?: string; to?: string }) {
-  const where = [];
-  if (filters.from) where.push(sql`${orders.createdAt} >= ${filters.from}`);
-  if (filters.to) where.push(sql`${orders.createdAt} <= ${filters.to}`);
-
-  const rows = await db
-    .select({
-      region: orders.region,
-      district: orders.district,
-      orders: sql<number>`count(*)`,
-      revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
-      units: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
-    })
-    .from(orders)
-    .leftJoin(orderItems, sql`${orderItems.orderId} = ${orders.id}`)
-    .where(where.length > 0 ? sql`${where[0]} ${where.slice(1)}` : undefined)
-    .groupBy(sql`${orders.region}, ${orders.district}`)
-    .orderBy(sql`sum(${orders.total}) DESC`);
+  const rows = await queryRows<{ region: string | null; district: string | null; orders: string; revenue: string; units: string }>(sql`
+    SELECT ${orders.region} AS region,
+           ${orders.district} AS district,
+           count(*) AS orders,
+           coalesce(sum(${orders.total}), 0) AS revenue,
+           coalesce(sum(u.units), 0) AS units
+    FROM ${orders}
+    LEFT JOIN ${unitsPerOrder} ON u.order_id = ${orders.id}
+    WHERE ${dateRange(filters)}
+    GROUP BY 1, 2
+    ORDER BY 4 DESC
+  `);
 
   return rows.map((row) => ({
-    region: String(row.region),
+    region: String(row.region ?? 'Unknown'),
     district: row.district ?? null,
     orders: Number(row.orders),
     revenue: Number(row.revenue),
@@ -118,19 +115,18 @@ export async function regionalDemand(filters: { from?: string; to?: string }) {
 }
 
 export async function forecast() {
-  const now = sql`datetime('now')`;
-  const last7 = sql`datetime('now', '-7 days')`;
-  const last30 = sql`datetime('now', '-30 days')`;
+  const last7 = sql`to_char((now() at time zone 'utc') - interval '7 days', 'YYYY-MM-DD HH24:MI:SS')`;
+  const last30 = sql`to_char((now() at time zone 'utc') - interval '30 days', 'YYYY-MM-DD HH24:MI:SS')`;
 
   const [revenue7, revenue30] = await Promise.all([
     db
       .select({ revenue: sql<number>`coalesce(sum(${orders.total}), 0)` })
       .from(orders)
-      .where(sql`${orders.createdAt} >= ${last7}`),
+      .where(sql`${orders.createdAt} >= ${last7} AND ${countedOrder}`),
     db
       .select({ revenue: sql<number>`coalesce(sum(${orders.total}), 0)` })
       .from(orders)
-      .where(sql`${orders.createdAt} >= ${last30}`),
+      .where(sql`${orders.createdAt} >= ${last30} AND ${countedOrder}`),
   ]);
 
   const inventory = await db
@@ -142,7 +138,7 @@ export async function forecast() {
       threshold: sql<number>`coalesce(${products.lowStockThreshold}, 10)`,
     })
     .from(products)
-    .where(sql`${products.active} = 1`);
+    .where(eq(products.active, true));
 
   const salesByProduct = await db
     .select({
@@ -151,7 +147,7 @@ export async function forecast() {
     })
     .from(orderItems)
     .innerJoin(orders, sql`${orders.id} = ${orderItems.orderId}`)
-    .where(sql`${orders.createdAt} >= ${last30}`)
+    .where(sql`${orders.createdAt} >= ${last30} AND ${orders.status} <> 'cancelled'`)
     .groupBy(orderItems.productId);
 
   const salesMap = new Map<number, number>();
@@ -186,7 +182,12 @@ export async function forecast() {
   };
 }
 
-export function toCsv(rows: Record<string, unknown>[], filename: string): Response {
+export function safeFilename(name: string): string {
+  return name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 100) || 'export.csv';
+}
+
+export function toCsv(rows: Record<string, unknown>[], rawFilename: string): Response {
+  const filename = safeFilename(rawFilename);
   if (!rows.length) {
     return new Response(`# ${filename}\n# no data\n`, {
       headers: {
@@ -198,7 +199,9 @@ export function toCsv(rows: Record<string, unknown>[], filename: string): Respon
 
   const headers = Object.keys(rows[0]);
   const escape = (value: unknown): string => {
-    const text = String(value ?? '');
+    let text = String(value ?? '');
+    // Spreadsheet formula injection: a cell starting with = + - @ would be executed.
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
     if (text.includes(',') || text.includes('"') || text.includes('\n')) {
       return `"${text.replace(/"/g, '""')}"`;
     }

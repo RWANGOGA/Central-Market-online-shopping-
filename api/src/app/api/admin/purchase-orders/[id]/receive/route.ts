@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { purchaseOrderItems, purchaseOrders } from '@/db/schema';
+import { purchaseOrderItems, purchaseOrders, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { recordMovement } from '@/lib/stockLedger';
 import { error, json } from '@/lib/http';
@@ -75,7 +75,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
     await tx
       .update(purchaseOrders)
-      .set({ status: 'received', receivedAt: sql`datetime('now')` })
+      .set({ status: 'received', receivedAt: nowText })
       .where(eq(purchaseOrders.id, order.id));
 
     return applied;

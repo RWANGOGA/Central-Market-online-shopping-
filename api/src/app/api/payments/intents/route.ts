@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { cartItems, carts, payments, products } from '@/db/schema';
+import { cartItems, carts, payments, products, nowText } from '@/db/schema';
 import { PAYMENT_METHODS, detectMobileMoneyProvider, maskCard, luhnValid, approvalInstructions, article } from '@/lib/payments';
 import { createSessionToken, hashToken } from '@/lib/password';
 import { error, json } from '@/lib/http';
@@ -211,7 +211,7 @@ export async function PATCH(request: Request) {
       failureReason: failureReason ?? null,
       // Single use: settling spends the token.
       settlementTokenHash: null,
-      updatedAt: sql`datetime('now')`,
+      updatedAt: nowText,
     })
     .where(eq(payments.id, payment.id))
     .returning();

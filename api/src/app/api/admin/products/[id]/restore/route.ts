@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { products } from '@/db/schema';
+import { products, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { describeStock, stockState } from '@/lib/stock';
 import { error, json } from '@/lib/http';
@@ -21,7 +21,7 @@ export async function POST(_request: Request, { params }: Ctx) {
 
   const [updated] = await db
     .update(products)
-    .set({ active: true, updatedAt: sql`datetime('now')` as unknown as string })
+    .set({ active: true, updatedAt: nowText as unknown as string })
     .where(eq(products.id, existing.id))
     .returning();
 

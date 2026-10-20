@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (match) {
     const token = decodeURIComponent(match[1]);
     const tokenHash = hashToken(token);
-    await db.delete(customerSessions).where(eq(customerSessions.tokenHash, tokenHash)).run();
+    await db.delete(customerSessions).where(eq(customerSessions.tokenHash, tokenHash));
   }
 
   return json(

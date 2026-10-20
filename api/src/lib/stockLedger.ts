@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from '@/db';
+import { db, queryRows } from '@/db';
 import { products, stockMovements } from '@/db/schema';
 import { LOW_STOCK_THRESHOLD, describeStock, stockState } from './stock';
 import { StockConflict } from './stockErrors';
@@ -134,7 +134,7 @@ export type ReconciliationRow = {
 };
 
 export async function lowStockProducts(): Promise<LowStockRow[]> {
-  return db.all<LowStockRow>(sql`
+  return queryRows<LowStockRow>(sql`
     SELECT
       p.id,
       p.name,
@@ -145,7 +145,7 @@ export async function lowStockProducts(): Promise<LowStockRow[]> {
       COALESCE(p.low_stock_threshold, ${LOW_STOCK_THRESHOLD}) AS threshold,
       p.reorder_quantity
     FROM products p
-    WHERE p.active = 1
+    WHERE p.active = true
       AND p.stock <= COALESCE(p.low_stock_threshold, ${LOW_STOCK_THRESHOLD})
     ORDER BY
       CAST(p.stock AS REAL) / NULLIF(COALESCE(p.low_stock_threshold, ${LOW_STOCK_THRESHOLD}), 0) ASC,
@@ -160,14 +160,14 @@ export async function lowStockProducts(): Promise<LowStockRow[]> {
  * recordMovement, which is exactly what this is for.
  */
 export async function reconcileStock(): Promise<ReconciliationRow[]> {
-  return db.all<ReconciliationRow>(sql`
+  return queryRows<ReconciliationRow>(sql`
     SELECT
       p.id,
       p.name,
       p.slug,
       p.stock AS stock_column,
-      COALESCE(SUM(m.delta), 0) AS ledger_total,
-      p.stock - COALESCE(SUM(m.delta), 0) AS drift
+      COALESCE(SUM(m.delta), 0)::int AS ledger_total,
+      (p.stock - COALESCE(SUM(m.delta), 0))::int AS drift
     FROM products p
     LEFT JOIN stock_movements m ON m.product_id = p.id
     GROUP BY p.id

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { db } from './index';
+import { db, queryRows } from './index';
 import { productPriceHistory, products } from './schema';
 
 /**
@@ -17,27 +17,27 @@ import { productPriceHistory, products } from './schema';
 async function backfill() {
   console.log('Backfilling product updated_at and initial price history...');
 
-  const updated = (await db.run(sql`
+  const updated = (await db.execute(sql`
     UPDATE products
     SET updated_at = COALESCE(NULLIF(updated_at, ''), created_at)
     WHERE updated_at IS NULL OR updated_at = ''
-  `)) as { rowsAffected?: number; changes?: number };
+  `)) as { rowCount?: number; changes?: number };
 
-  console.log(`  ${updated?.rowsAffected ?? updated?.changes ?? 0} product(s) updated.`);
+  console.log(`  ${updated?.rowCount ?? updated?.changes ?? 0} product(s) updated.`);
 
-  const inserted = (await db.run(sql`
+  const inserted = (await db.execute(sql`
     INSERT INTO product_price_history (product_id, price_value, unit, price_label, changed_by_email, created_at)
     SELECT p.id, p.price_value, p.unit, p.price_label, 'system', p.created_at
     FROM products p
     WHERE NOT EXISTS (
       SELECT 1 FROM product_price_history h WHERE h.product_id = p.id
     )
-  `)) as { rowsAffected?: number; changes?: number };
+  `)) as { rowCount?: number; changes?: number };
 
-  const historyCount = inserted?.rowsAffected ?? inserted?.changes ?? 0;
+  const historyCount = inserted?.rowCount ?? inserted?.changes ?? 0;
   console.log(`  ${historyCount} initial price history row(s) written.`);
 
-  const totals = await db.all<{ product: string; n: number }>(sql`
+  const totals = await queryRows<{ product: string; n: number }>(sql`
     SELECT p.name AS product, COUNT(h.id) AS n
     FROM products p
     LEFT JOIN product_price_history h ON h.product_id = p.id

@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { carts, customers, orderItems, orderStatusEvents, orders, products } from '@/db/schema';
+import { carts, customers, orderItems, orderStatusEvents, orders, products, nowText } from '@/db/schema';
 import { loadCart } from '@/lib/cart';
 import { error, json, parsePositiveInt } from '@/lib/http';
 import { checkLocation } from '@/lib/locationGuard';
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
         // existing column was added by ALTER TABLE, where SQLite refuses a
         // non-constant default like datetime('now'), so it holds '' until
         // this writes it.
-        updatedAt: sql`datetime('now')`,
+        updatedAt: nowText,
         subtotal,
         shipping,
         tax,
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
 
     await tx
       .update(carts)
-      .set({ status: 'converted', updatedAt: sql`datetime('now')` })
+      .set({ status: 'converted', updatedAt: nowText })
       .where(eq(carts.id, cartId));
 
     return order;

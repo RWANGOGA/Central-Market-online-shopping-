@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { db } from './index';
+import { db, queryRows } from './index';
 import { stockMovements } from './schema';
 
 /**
@@ -18,7 +18,7 @@ import { stockMovements } from './schema';
 async function seedOpeningBalances() {
   console.log('Seeding opening stock balances...');
 
-  const result = (await db.run(sql`
+  const result = (await db.execute(sql`
     INSERT INTO stock_movements (product_id, delta, reason, reference, note, actor_label, created_at)
     SELECT
       p.id,
@@ -27,20 +27,20 @@ async function seedOpeningBalances() {
       NULL,
       'Balance carried over when the stock ledger was introduced',
       'system',
-      COALESCE(p.created_at, datetime('now'))
+      COALESCE(p.created_at, to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS'))
     FROM products p
     WHERE p.stock > 0
       AND NOT EXISTS (SELECT 1 FROM stock_movements m WHERE m.product_id = p.id)
-  `)) as { rowsAffected?: number; changes?: number };
+  `)) as { rowCount?: number; changes?: number };
 
-  const inserted = result?.rowsAffected ?? result?.changes ?? 0;
+  const inserted = result?.rowCount ?? result?.changes ?? 0;
   console.log(`  ${inserted} opening balance(s) written.`);
 
   // Anything already adjusted before the ledger existed shows up as drift.
   // Rather than silently reseting a database or quietly editing the stock
   // column, write a correction movement so the difference becomes visible and
   // stays auditable. This is a one-time reconciliation for historical data.
-  const corrected = await db.all<{ id: number; name: string; stock: number; ledger_total: number; drift: number }>(sql`
+  const corrected = await queryRows<{ id: number; name: string; stock: number; ledger_total: number; drift: number }>(sql`
     SELECT p.id, p.name, p.stock,
            COALESCE(SUM(m.delta), 0) AS ledger_total,
            p.stock - COALESCE(SUM(m.delta), 0) AS drift
@@ -52,7 +52,7 @@ async function seedOpeningBalances() {
 
   if (corrected.length > 0) {
     console.log(`  reconciling ${corrected.length} product(s) changed before the ledger existed:`);
-    await db.run(sql`
+    await db.execute(sql`
       INSERT INTO stock_movements (product_id, delta, reason, reference, note, actor_label, created_at)
       SELECT p.id,
              p.stock - COALESCE(SUM(m.delta), 0),
@@ -60,7 +60,7 @@ async function seedOpeningBalances() {
              NULL,
              'Opening balance reconciled after the stock ledger was introduced',
              'system',
-             datetime('now')
+             to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')
       FROM products p
       LEFT JOIN stock_movements m ON m.product_id = p.id
       GROUP BY p.id
@@ -74,7 +74,7 @@ async function seedOpeningBalances() {
   }
 
   // The reconciliation identity, checked rather than assumed.
-  const drift = await db.all<{ name: string; stock: number; ledger_total: number }>(sql`
+  const drift = await queryRows<{ name: string; stock: number; ledger_total: number }>(sql`
     SELECT p.id, p.name, p.stock,
            COALESCE(SUM(m.delta), 0) AS ledger_total
     FROM products p
@@ -92,7 +92,7 @@ async function seedOpeningBalances() {
     return;
   }
 
-  const totals = await db.all<{ reason: string; n: number; total: number }>(sql`
+  const totals = await queryRows<{ reason: string; n: number; total: number }>(sql`
     SELECT reason, COUNT(*) AS n, SUM(delta) AS total
     FROM stock_movements GROUP BY reason
   `);

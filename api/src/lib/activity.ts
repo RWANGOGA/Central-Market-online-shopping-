@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { adminActivityLog, admins } from '@/db/schema';
+import { adminActivityLog, admins, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { error, json } from '@/lib/http';
 

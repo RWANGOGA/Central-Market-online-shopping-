@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { notifications } from '@/db/schema';
+import { notifications, nowText } from '@/db/schema';
 import { sql } from 'drizzle-orm';
 
 export type NotificationType = 'order' | 'stock' | 'delivery' | 'system' | 'promotion';

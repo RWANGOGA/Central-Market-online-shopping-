@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { productPriceHistory, products } from '@/db/schema';
+import { productPriceHistory, products, nowText } from '@/db/schema';
 import { priceLabelFor, productUpdateSchema, requireAdmin } from '@/lib/catalogue';
 import { describeStock, stockState } from '@/lib/stock';
 import { storeProductImage } from '@/lib/uploads';
@@ -68,7 +68,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
   }
 
   const set: Partial<typeof products.$inferInsert> = {};
-  set.updatedAt = sql`datetime('now')` as unknown as string;
+  set.updatedAt = nowText as unknown as string;
 
   if (input.name !== undefined) set.name = input.name;
   if (input.slug !== undefined) set.slug = input.slug;
