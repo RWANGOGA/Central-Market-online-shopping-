@@ -356,6 +356,50 @@ export async function createSupplier(input: CreateSupplierInput): Promise<Result
   return call<SupplierRow>('/suppliers', { method: 'POST', body: JSON.stringify(input) });
 }
 
+/* ---------- Promo codes ---------- */
+
+export type AdminPromo = {
+  id: number;
+  code: string;
+  description: string;
+  kind: 'percent' | 'fixed';
+  value: number;
+  minSubtotal: number;
+  maxDiscount: number | null;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  usageLimit: number | null;
+  usedCount: number;
+  perCustomerLimit: number | null;
+  createdAt: string;
+  state: 'live' | 'scheduled' | 'paused' | 'expired' | 'exhausted';
+};
+
+export type PromoDraft = {
+  code: string;
+  description?: string;
+  kind: 'percent' | 'fixed';
+  value: number;
+  minSubtotal?: number;
+  maxDiscount?: number | null;
+  usageLimit?: number | null;
+  perCustomerLimit?: number | null;
+  endsAt?: string | null;
+};
+
+export async function listPromos(): Promise<Result<AdminPromo[]>> {
+  return call<AdminPromo[]>('/promos');
+}
+
+export async function createPromo(draft: PromoDraft): Promise<Result<AdminPromo>> {
+  return call<AdminPromo>('/promos', { method: 'POST', body: JSON.stringify(draft) });
+}
+
+export async function setPromoActive(id: number, active: boolean): Promise<Result<AdminPromo>> {
+  return call<AdminPromo>(`/promos/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) });
+}
+
 /* ---------- Analytics ---------- */
 
 export type SalesTrendPoint = {

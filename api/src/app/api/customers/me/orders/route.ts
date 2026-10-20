@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { customers, orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
 import { getCurrentCustomer } from '@/lib/customerSession';
 import { toPaymentDto } from '@/lib/payments';
+import { toTimelineDto } from '@/lib/orderTimeline';
 import { error, json } from '@/lib/http';
 
 /**
@@ -63,12 +64,19 @@ export async function GET(request: Request) {
     paymentsByOrder.set(key, arr);
   }
 
-  const data = ordersList.map((order) => ({
-    ...order,
-    items: itemsByOrder.get(order.id) ?? [],
-    timeline: (timelineByOrder.get(order.id) ?? []).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-    payments: (paymentsByOrder.get(order.id) ?? []).map(toPaymentDto),
-  }));
+  const data = ordersList.map((order) => {
+    // The tracking hash and staff emails stay on the server; history shows the
+    // same public timeline as the single-order endpoint.
+    const { trackingTokenHash: _trackingTokenHash, ...safe } = order;
+    return {
+      ...safe,
+      items: itemsByOrder.get(order.id) ?? [],
+      timeline: (timelineByOrder.get(order.id) ?? [])
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .map(toTimelineDto),
+      payments: (paymentsByOrder.get(order.id) ?? []).map(toPaymentDto),
+    };
+  });
 
   const totalRow = await db.select({ total: sql<number>`count(*)` }).from(orders).where(eq(orders.customerId, customer.id));
 

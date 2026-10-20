@@ -63,12 +63,14 @@ export async function POST(request: Request) {
   const cart = await requireCart(request, cartId);
   if (!cart) return error('Cart not found', 404);
 
-  const order = await db.query.orders.findFirst({ where: eq(orders.reference, orderReference) });
-  if (!order || order.cartId !== cartId) return error('Order not found', 404);
+  // Cart ownership is the proof here: the reference is useless without the
+  // mk_cart cookie, and the order must belong to that same cart. The tracking
+  // cookie is scoped to /api/orders, so guests cannot present it at this path.
+  const order = await db.query.orders.findFirst({
+    where: and(eq(orders.reference, orderReference), eq(orders.cartId, cartId)),
+  });
+  if (!order) return error('Order not found', 404);
   if (order.status !== 'pending') return error('This order is not awaiting payment.', 409);
-  // A guest proves ownership with the tracking cookie; a customer with the
-  // session. An id alone is never enough.
-  if (!(await ownsOrder(request, order))) return error('Order not found', 404);
 
   if (!(await allow(`payment-intent-order:${order.id}`, 10, 60 * 60))) {
     return error('Too many payment attempts for this order. Try again later.', 429);
@@ -215,6 +217,8 @@ export async function POST(request: Request) {
       },
       totals: {
         subtotal: order.subtotal,
+        discount: order.discount,
+        promoCode: order.promoCode,
         shipping: order.shipping,
         tax: order.tax,
         total: order.total,

@@ -1,0 +1,62 @@
+import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { db } from '@/db';
+import { promoCodes } from '@/db/schema';
+import { requireAdmin } from '@/lib/catalogue';
+import { recordActivity } from '@/lib/activity';
+import { error, json } from '@/lib/http';
+import { csrfCheck } from '@/lib/security';
+import { promoState } from '@/lib/promotions';
+
+type Ctx = { params: Promise<{ id: string }> };
+
+const patchSchema = z.object({ active: z.boolean() }).strict();
+
+/** Pausing a code keeps its history; the rules themselves are immutable. */
+export async function PATCH(request: Request, { params }: Ctx) {
+  const blocked = csrfCheck(request);
+  if (blocked) return blocked;
+  const admin = await requireAdmin(request);
+  if (!admin) return error('Not signed in', 401);
+
+  const { id } = await params;
+  const key = Number(id);
+  if (!Number.isInteger(key) || key <= 0) return error('Promo not found', 404);
+
+  const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return error('Say whether the code should be active.', 422);
+
+  const [updated] = await db.update(promoCodes)
+    .set({ active: parsed.data.active })
+    .where(eq(promoCodes.id, key))
+    .returning();
+  if (!updated) return error('Promo not found', 404);
+
+  await recordActivity({
+    action: parsed.data.active ? 'promo.resume' : 'promo.pause',
+    entity: 'promo',
+    entityId: updated.id,
+    adminId: admin.id,
+    after: { code: updated.code, active: updated.active },
+  });
+
+  return json({
+    data: {
+      id: updated.id,
+      code: updated.code,
+      description: updated.description,
+      kind: updated.kind,
+      value: updated.value,
+      minSubtotal: updated.minSubtotal,
+      maxDiscount: updated.maxDiscount,
+      active: updated.active,
+      startsAt: updated.startsAt,
+      endsAt: updated.endsAt,
+      usageLimit: updated.usageLimit,
+      usedCount: updated.usedCount,
+      perCustomerLimit: updated.perCustomerLimit,
+      createdAt: updated.createdAt,
+      state: promoState(updated),
+    },
+  });
+}

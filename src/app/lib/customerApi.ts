@@ -46,23 +46,8 @@ export interface CustomerOrder {
     quantity: number;
     lineTotal: number;
   }[];
-  timeline: {
-    id: number;
-    fromStatus?: string;
-    toStatus: string;
-    note?: string;
-    changedByEmail?: string;
-    createdAt: string;
-  }[];
-  payments: {
-    id: number;
-    reference: string;
-    status: string;
-    amount: number;
-    channel: string;
-    provider: string;
-    createdAt: string;
-  }[];
+  timeline: OrderTimelineEvent[];
+  payments: OrderPaymentSummary[];
 }
 
 export interface CustomerOrdersResult {
@@ -97,6 +82,34 @@ export interface CustomerNotification {
   read: boolean;
   createdAt: string;
 }
+
+export interface CustomerAddress {
+  id: number;
+  label: string;
+  fullName: string;
+  phone: string;
+  region: string;
+  district: string | null;
+  subCounty: string | null;
+  parish: string | null;
+  village: string | null;
+  address: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export type CustomerAddressInput = {
+  label: string;
+  fullName: string;
+  phone: string;
+  region: string;
+  district?: string | null;
+  subCounty?: string | null;
+  parish?: string | null;
+  village?: string | null;
+  address: string;
+  isDefault?: boolean;
+};
 
 export interface CustomerNotificationsResult {
   data: CustomerNotification[];
@@ -190,12 +203,88 @@ export async function createOrder(
     village?: string;
     address: string;
   },
+  promoCode?: string,
 ): Promise<{ reference: string }> {
   const data = await request<{ data: { reference: string } }>('/orders', {
     method: 'POST',
-    body: JSON.stringify({ cartId, ...(shipping ? { shipping } : {}) }),
+    body: JSON.stringify({
+      cartId,
+      ...(shipping ? { shipping } : {}),
+      ...(promoCode ? { promoCode } : {}),
+    }),
   });
   return data.data;
+}
+
+export interface OrderTimelineEvent {
+  id: number;
+  fromStatus: string | null;
+  toStatus: string;
+  note: string | null;
+  actor: 'customer' | 'staff' | 'system';
+  at: string;
+}
+
+export interface OrderPaymentSummary {
+  reference: string;
+  status: string;
+  amount: number;
+  currency: string;
+  channel: string;
+  provider: string;
+  maskedCard: string | null;
+  failureReason: string | null;
+  createdAt?: string;
+}
+
+export interface TrackedOrderItem {
+  id: number;
+  productId: number;
+  name: string;
+  priceValue: number;
+  quantity: number;
+  lineTotal: number;
+}
+
+export interface TrackedOrder {
+  id: number;
+  reference: string;
+  status: string;
+  subtotal: number;
+  discount: number;
+  promoCode: string | null;
+  shipping: number;
+  tax: number;
+  total: number;
+  currency: string;
+  customerName: string;
+  phone: string;
+  region: string | null;
+  district: string | null;
+  createdAt: string;
+  updatedAt: string;
+  shippingAddress?: {
+    fullName?: string;
+    phone?: string;
+    address?: string;
+    region?: string;
+    district?: string | null;
+    subCounty?: string | null;
+    parish?: string | null;
+    village?: string | null;
+  } | null;
+  items: TrackedOrderItem[];
+  timeline: OrderTimelineEvent[];
+  payments: OrderPaymentSummary[];
+}
+
+/**
+ * One order, with its public status timeline. Guests prove ownership with the
+ * tracking cookie, signed-in customers with their session.
+ */
+export async function fetchOrder(reference: string): Promise<TrackedOrder> {
+  const body = await request<{ data: TrackedOrder }>(`/orders/${encodeURIComponent(reference)}`);
+  return body.data;
 }
 
 export async function fetchCustomerPreferences(): Promise<CustomerPreferences> {
@@ -228,4 +317,33 @@ export async function markCustomerNotificationsRead(input: { id?: number; all?: 
     body: JSON.stringify(input),
   });
   return body.data.updated;
+}
+
+/** The customer's saved delivery addresses, default first. */
+export async function fetchCustomerAddresses(): Promise<CustomerAddress[]> {
+  const body = await request<{ data: CustomerAddress[] }>('/customers/addresses');
+  return body.data;
+}
+
+export async function createCustomerAddress(input: CustomerAddressInput): Promise<CustomerAddress> {
+  const body = await request<{ data: CustomerAddress }>('/customers/addresses', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return body.data;
+}
+
+export async function updateCustomerAddress(
+  id: number,
+  input: Partial<CustomerAddressInput>,
+): Promise<CustomerAddress> {
+  const body = await request<{ data: CustomerAddress }>(`/customers/addresses/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return body.data;
+}
+
+export async function deleteCustomerAddress(id: number): Promise<void> {
+  await request(`/customers/addresses/${id}`, { method: 'DELETE' });
 }

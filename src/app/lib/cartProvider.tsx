@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, startFreshCart, CartError } from './cartApi';
+import { resolveCartId, addItem as apiAddItem, updateItem, fetchCart, startFreshCart, reorderOrder, CartError, type ReorderResult } from './cartApi';
+import { toAppliedPromo, validatePromo, type AppliedPromo, type PromoResult } from './promoApi';
 import { fetchStock, applyStockDelta, type StockLevel } from './stockApi';
 import { useCatalogue, type CatalogueProduct } from './catalogue';
 
@@ -164,6 +165,12 @@ interface OverlayProduct {
   image: string;
 }
 
+/** What a reorder actually achieved, for the confirmation the profile shows. */
+export interface ReorderOutcome {
+  added: number;
+  skipped: { name: string; reason: string }[];
+}
+
 /**
  * Cart lines are always built from the local catalogue, whether they arrive
  * from a tap or from the API on reload, so the basket always renders with the
@@ -195,12 +202,17 @@ interface CartContextType {
   overlayProduct: OverlayProduct | null;
   overlayQuantity: number;
   showOverlay: boolean;
+  /** The code the shopper applied, as agreed with the server. */
+  promo: AppliedPromo | null;
   addToCart: (productId?: number, quantityToAdd?: number) => void;
   updateCartItemQuantity: (productId: number, quantity: number) => void;
   toggleFavorite: (productId: number) => void;
   setSearchTerm: (term: string) => void;
   setSortOption: (option: SortOption) => void;
+  applyPromo: (code: string) => Promise<PromoResult>;
+  clearPromo: () => void;
   finalizePurchase: (serverCartId: number | null) => void;
+  reorderFromOrder: (reference: string) => Promise<ReorderOutcome | null>;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -211,6 +223,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('default');
+  const [promo, setPromo] = useState<AppliedPromo | null>(null);
 
   // Server cart. Null means the API is not running and the cart stays local.
   const cartIdRef = useRef<number | null>(null);
@@ -227,6 +240,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const { products, live: catalogueLive, refresh: refreshCatalogue } = useCatalogue(FALLBACK_CATALOGUE);
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // A code is tied to a basket; once the basket is emptied there is nothing
+  // left for it to discount, so it is dropped rather than silently kept.
+  useEffect(() => {
+    if (cartItems.length === 0) setPromo(null);
+  }, [cartItems.length]);
 
   // Poll stock so the figures stay current without a manual refresh.
   useEffect(() => {
@@ -402,6 +421,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return next;
     });
     setCartItems([]);
+    setPromo(null);
     // The cart that became this order is `converted`; writing to it would be
     // refused. A new cart is the only correct next state.
     startFreshCart().then((id) => {
@@ -409,6 +429,74 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setCartId(id);
     });
   }, [cartItems]);
+
+  /**
+   * Quotes a code against the server's cart total and keeps it only when the
+   * server agrees. The discount itself is still recomputed at order time.
+   */
+  const applyPromo = async (code: string): Promise<PromoResult> => {
+    let id = cartIdRef.current;
+    if (!id) {
+      id = await resolveCartId();
+      if (!id) return { ok: false, error: 'The basket service is unavailable right now.' };
+      cartIdRef.current = id;
+      setCartId(id);
+    }
+    const result = await validatePromo(id, code);
+    if (result.ok) setPromo(toAppliedPromo(result.data));
+    return result;
+  };
+
+  const clearPromo = () => setPromo(null);
+
+  /**
+   * Puts a past order back in the basket.
+   *
+   * The server owns the decision about what is still buyable; this function
+   * only mirrors the cart it returns into local state. A converted cart (the
+   * one the order was made from) cannot accept lines, so a fresh one is
+   * opened and the request retried once.
+   */
+  const reorderFromOrder = async (reference: string): Promise<ReorderOutcome | null> => {
+    let id = cartIdRef.current;
+    if (!id) {
+      id = await resolveCartId();
+      if (!id) return null; // API not running; there is no server basket to fill
+      cartIdRef.current = id;
+      setCartId(id);
+    }
+
+    let result: ReorderResult | null;
+    try {
+      result = await reorderOrder(reference, id);
+    } catch (err) {
+      // A cart that has already become an order refuses new lines, and a cart
+      // the browser no longer owns cannot be found. Both mean the saved cart
+      // id is stale, so a new cart is opened and the request retried once.
+      const stale =
+        err instanceof CartError &&
+        ((err.status === 409 && /no longer active/i.test(err.message)) ||
+          (err.status === 404 && /cart not found/i.test(err.message)));
+      if (!stale) throw err;
+      const fresh = await startFreshCart();
+      if (!fresh) return null;
+      cartIdRef.current = fresh;
+      setCartId(fresh);
+      result = await reorderOrder(reference, fresh);
+    }
+    if (!result) return null;
+
+    const restored = result.cart.items.flatMap((line) => {
+      const product = products.find((p) => p.id === line.productId);
+      return product ? [buildCartItem(product, line.quantity)] : [];
+    });
+    setCartItems(restored);
+
+    return {
+      added: result.added.reduce((sum, line) => sum + line.quantity, 0),
+      skipped: result.skipped,
+    };
+  };
 
   const value: CartContextType = {
     products,
@@ -424,12 +512,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     overlayProduct,
     overlayQuantity,
     showOverlay,
+    promo,
     addToCart,
     updateCartItemQuantity,
     toggleFavorite,
     setSearchTerm,
     setSortOption,
+    applyPromo,
+    clearPromo,
     finalizePurchase,
+    reorderFromOrder,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

@@ -4,10 +4,13 @@ import { Input } from './ui/input';
 import GeoCascade from './GeoCascade';
 import { isValidUgandanPhone, normalizeUgandanPhone } from '../lib/uganda';
 import { fetchHierarchy, validateSelection, type GeoNode } from '../lib/geoApi';
+import { fetchCustomerAddresses, type CustomerAddress } from '../lib/customerApi';
 
 interface CheckoutPageProps {
   cartCount: number;
   customerInfo: CustomerInfo;
+  /** Saved addresses only exist for a signed-in customer. */
+  signedIn?: boolean;
   onBack: () => void;
   onMenuClick: () => void;
   onProceedToPayment: (customerInfo: CustomerInfo) => void;
@@ -29,15 +32,36 @@ interface CustomerInfo {
   address: string;
 }
 
-export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuClick, onProceedToPayment }: CheckoutPageProps) {
+export default function CheckoutPage({ cartCount, customerInfo, signedIn = false, onBack, onMenuClick, onProceedToPayment }: CheckoutPageProps) {
   const [formData, setFormData] = useState<CustomerInfo>(customerInfo);
   const [hierarchy, setHierarchy] = useState<GeoNode[] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [phoneTouched, setPhoneTouched] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
 
   useEffect(() => {
     setFormData(customerInfo);
   }, [customerInfo]);
+
+  // The address book is a shortcut, not a requirement: when it cannot be
+  // loaded the form works exactly as before.
+  useEffect(() => {
+    if (!signedIn) {
+      setSavedAddresses([]);
+      return;
+    }
+    let cancelled = false;
+    fetchCustomerAddresses()
+      .then((rows) => {
+        if (!cancelled) setSavedAddresses(rows);
+      })
+      .catch(() => {
+        // Signed out mid-session or API unreachable; the manual form remains.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
 
   // The cascade is driven by the same hierarchy the server validates against,
   // so anything selectable here is guaranteed to be accepted there.
@@ -110,6 +134,23 @@ export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuCl
     });
   };
 
+  /** Fills the form from a saved address. The cascade re-validates every level,
+   *  so a stale address is corrected rather than silently submitted. */
+  const applySavedAddress = (address: CustomerAddress) => {
+    setFormData({
+      fullName: address.fullName,
+      phone: address.phone,
+      region: address.region,
+      district: address.district ?? '',
+      subCounty: address.subCounty ?? '',
+      parish: address.parish ?? '',
+      village: address.village ?? '',
+      address: address.address,
+    });
+    setPhoneTouched(false);
+    setGeoError(null);
+  };
+
   return (
     <div className="bg-[#ffffff] relative size-full">
       {/* Status Bar */}
@@ -150,6 +191,32 @@ export default function CheckoutPage({ cartCount, customerInfo, onBack, onMenuCl
       <div className="absolute left-0 right-0 top-[286px] bottom-[124px] overflow-y-auto">
         <div className="px-6 pb-6 pt-1">
           <div className="box-border content-stretch flex flex-col gap-2 items-start justify-start p-0 relative w-full">
+
+            {/* Saved addresses fill the form in one tap; the fields stay editable. */}
+            {savedAddresses.length > 0 && (
+              <div className="w-full pb-1">
+                <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] pb-1">
+                  Deliver to a saved address
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {savedAddresses.map((address) => (
+                    <button
+                      key={address.id}
+                      type="button"
+                      onClick={() => applySavedAddress(address)}
+                      className="shrink-0 max-w-[180px] text-left border border-neutral-200 rounded-lg px-3 py-2 hover:border-[#426b1f] transition-colors"
+                    >
+                      <span className="block font-['Inter:Medium',_sans-serif] text-[13px] text-[#000000] truncate">
+                        {address.label}{address.isDefault ? ' · default' : ''}
+                      </span>
+                      <span className="block font-['Inter:Regular',_sans-serif] text-[11px] text-[#757575] truncate">
+                        {address.address}{address.district ? `, ${address.district}` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Full Name */}
             <FormField label="Full name">

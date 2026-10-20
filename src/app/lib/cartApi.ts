@@ -23,6 +23,15 @@ export type ApiCart = {
   subtotal: number;
 };
 
+/** The server's answer to a reorder: what went back into the basket, and why
+ *  anything did not. The cart is returned whole so the UI can render it
+ *  without a second round trip. */
+export type ReorderResult = {
+  added: { productId: number; name: string; quantity: number }[];
+  skipped: { name: string; reason: string }[];
+  cart: ApiCart;
+};
+
 /**
  * A cart write that reached the server and was refused.
  *
@@ -179,4 +188,16 @@ export async function startFreshCart(): Promise<number | null> {
   forgetCartId();
   const created = await createCart();
   return created ? created.id : null;
+}
+
+/**
+ * Copies a past order's lines into the current cart. The server decides what
+ * is still buyable; a refusal (for example a converted cart) throws CartError
+ * and a network failure returns null, like every other cart write.
+ */
+export async function reorderOrder(reference: string, cartId: number): Promise<ReorderResult | null> {
+  return mutate<ReorderResult>(`/orders/${encodeURIComponent(reference)}/reorder`, {
+    method: 'POST',
+    body: JSON.stringify({ cartId }),
+  });
 }

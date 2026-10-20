@@ -3,6 +3,7 @@ import svgPaths from "../imports/svg-ixc5uwmuox";
 import QuantityDropdown from './QuantityDropdown';
 import IconForward from '../imports/IconForward-2013-176';
 import { formatUgx } from '../lib/currency';
+import { discountFor, promoShortfall, type AppliedPromo, type PromoResult } from '../lib/promoApi';
 
 interface CartItem {
   id: number;
@@ -20,6 +21,9 @@ interface BasketPageProps {
   onMenuClick: () => void;
   onUpdateQuantity: (productId: number, quantity: number) => void;
   onGoToCheckout?: () => void;
+  promo?: AppliedPromo | null;
+  onApplyPromo?: (code: string) => Promise<PromoResult>;
+  onClearPromo?: () => void;
   errorMessage?: string | null;
 }
 
@@ -29,10 +33,15 @@ export default function BasketPage({
   onMenuClick, 
   onUpdateQuantity,
   onGoToCheckout,
+  promo,
+  onApplyPromo,
+  onClearPromo,
   errorMessage,
 }: BasketPageProps) {
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + (item.priceValue * item.quantity), 0);
+  const discount = promo ? discountFor(promo, subtotal) : 0;
+  const shortfall = promo ? promoShortfall(promo, subtotal) : 0;
 
   const isEmpty = cartItems.length === 0;
 
@@ -67,7 +76,16 @@ export default function BasketPage({
                   />
                 ))}
               </div>
-              
+
+              {onApplyPromo && onClearPromo && (
+                <PromoSection
+                  promo={promo ?? null}
+                  subtotal={subtotal}
+                  onApply={onApplyPromo}
+                  onClear={onClearPromo}
+                />
+              )}
+
               {/* Subtotal - 24px below the last product card */}
               <div className="flex justify-between items-center">
                 <div className="flex flex-col font-['Inter:Regular',_sans-serif] font-normal justify-center leading-[0] not-italic text-[#000000] text-[18px] text-left text-nowrap">
@@ -77,6 +95,27 @@ export default function BasketPage({
                   <p className="block leading-[1.45] whitespace-pre text-[18px]">{formatUgx(subtotal)}</p>
                 </div>
               </div>
+
+              {promo && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex justify-between items-center font-['Inter:Regular',_sans-serif] text-[14px]">
+                    <span className="text-[#426b1f]">Discount &middot; {promo.code}</span>
+                    <span className="text-[#426b1f] tabular-nums">
+                      {discount > 0 ? `\u2212 ${formatUgx(discount)}` : formatUgx(0)}
+                    </span>
+                  </div>
+                  {shortfall > 0 ? (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 font-['Inter:Regular',_sans-serif] text-[12px] leading-[18px] text-amber-800">
+                      Add {formatUgx(shortfall)} more to this basket and {promo.code} will apply.
+                    </p>
+                  ) : (
+                    <div className="flex justify-between items-center font-['Inter:Medium',_sans-serif] text-[15px]">
+                      <span className="text-[#000000]">Total before delivery</span>
+                      <span className="text-[#426b1f] tabular-nums">{formatUgx(subtotal - discount)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           
@@ -85,6 +124,98 @@ export default function BasketPage({
         </>
       )}
     </div>
+  );
+}
+
+interface PromoSectionProps {
+  promo: AppliedPromo | null;
+  subtotal: number;
+  onApply: (code: string) => Promise<PromoResult>;
+  onClear: () => void;
+}
+
+function PromoSection({ promo, subtotal, onApply, onClear }: PromoSectionProps) {
+  const [code, setCode] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+
+  const apply = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = code.trim();
+    if (!trimmed || busy) return;
+    setBusy(true);
+    setMessage(null);
+    const result = await onApply(trimmed);
+    setBusy(false);
+    if (result.ok) {
+      setCode('');
+    } else {
+      setMessage(result.error);
+    }
+  };
+
+  if (promo) {
+    const shortfall = promoShortfall(promo, subtotal);
+    return (
+      <div className="mb-6 rounded-xl border border-[#426b1f]/30 bg-[#426b1f]/5 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-['Inter:Medium',_sans-serif] text-[13px] text-[#426b1f]">{promo.code}</p>
+            {promo.description && (
+              <p className="mt-0.5 font-['Inter:Regular',_sans-serif] text-[11px] leading-[16px] text-[#757575]">
+                {promo.description}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] underline"
+          >
+            Remove
+          </button>
+        </div>
+        {shortfall > 0 && (
+          <p className="mt-2 font-['Inter:Regular',_sans-serif] text-[11px] leading-[16px] text-amber-700">
+            Add {formatUgx(shortfall)} more for this code to apply.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={apply} className="mb-6">
+      <label
+        htmlFor="promo-code"
+        className="mb-1 block font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575]"
+      >
+        Promo code
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="promo-code"
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          placeholder="e.g. WELCOME10"
+          autoCapitalize="characters"
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-3 py-2 font-['Inter:Regular',_sans-serif] text-[14px] uppercase"
+        />
+        <button
+          type="submit"
+          disabled={busy || code.trim().length === 0}
+          className="rounded-lg bg-[#426b1f] px-4 py-2 font-['Inter:Medium',_sans-serif] text-[13px] text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? 'Checking…' : 'Apply'}
+        </button>
+      </div>
+      {message && (
+        <p role="alert" className="mt-1 font-['Inter:Regular',_sans-serif] text-[11px] leading-[16px] text-red-600">
+          {message}
+        </p>
+      )}
+    </form>
   );
 }
 

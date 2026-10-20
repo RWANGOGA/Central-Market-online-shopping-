@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import svgPaths from "../imports/svg-x4vilrsbuo";
 import DeliveryLocationMap from './DeliveryLocationMap';
+import { fetchOrder, type TrackedOrder } from '../lib/customerApi';
+import { formatUgx } from '../lib/currency';
 
 interface OrderConfirmationPageProps {
   cartCount: number;
@@ -8,6 +10,8 @@ interface OrderConfirmationPageProps {
   orderReference: string | null;
   onShop: () => void;
   onMenuClick: () => void;
+  /** Present when the order is still waiting for payment. */
+  onPay?: () => void;
 }
 
 interface CustomerInfo {
@@ -21,139 +25,386 @@ interface CustomerInfo {
   address: string;
 }
 
-export default function OrderConfirmationPage({ cartCount, customerInfo, orderReference, onShop, onMenuClick }: OrderConfirmationPageProps) {
-  // Generate estimated delivery date (3-5 business days from now)
-  const getEstimatedDelivery = () => {
-    const today = new Date();
-    const deliveryDate = new Date(today);
-    deliveryDate.setDate(today.getDate() + 4); // 4 days from now
-    
-    return deliveryDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+const STEPS = [
+  { key: 'pending', label: 'Order placed', description: 'We received your order and reserved your produce.' },
+  { key: 'processing', label: 'Being prepared', description: 'Paid for and packed by the farm team.' },
+  { key: 'shipped', label: 'Out for delivery', description: 'A rider is on the way with your basket.' },
+  { key: 'delivered', label: 'Delivered', description: 'Handed over at your delivery address.' },
+] as const;
 
-  // Format address for display
-  const formatAddress = () => {
-    const addressParts = [
-      customerInfo.fullName,
-      customerInfo.address,
-      // Most precise first, dropping any level that was never populated.
-      [customerInfo.village, customerInfo.parish, customerInfo.subCounty, customerInfo.district]
-        .filter(Boolean)
-        .join(', '),
-      customerInfo.region,
-      customerInfo.phone
-    ].filter(part => part && part.trim() !== '');
+const STATUS_COPY: Record<string, { title: string; subtitle: string }> = {
+  pending: { title: 'Waiting for payment', subtitle: 'Complete payment and we will start packing your basket.' },
+  processing: { title: 'Your order is being prepared', subtitle: 'The farm team is packing your produce right now.' },
+  shipped: { title: 'Your order is on the way', subtitle: 'A rider has picked up your basket.' },
+  delivered: { title: 'Your order was delivered', subtitle: 'Thank you for shopping with Mu Katale.' },
+  cancelled: { title: 'This order was cancelled', subtitle: 'No money was taken. Any reserved stock has been returned.' },
+};
 
-    return addressParts;
-  };
+function formatWhen(value: string): string {
+  const parsed = new Date(value.replace(' ', 'T'));
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString('en-UG', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
-  const formattedAddress = formatAddress();
-  const estimatedDelivery = getEstimatedDelivery();
+export default function OrderConfirmationPage({
+  cartCount,
+  customerInfo,
+  orderReference,
+  onShop,
+  onMenuClick,
+  onPay,
+}: OrderConfirmationPageProps) {
+  const [order, setOrder] = useState<TrackedOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async (silent = false) => {
+    if (!orderReference) {
+      setLoading(false);
+      setError('This link has no order reference, so the order cannot be tracked.');
+      return;
+    }
+    if (!silent) setLoading(true);
+    try {
+      const data = await fetchOrder(orderReference);
+      setOrder(data);
+      setError(null);
+    } catch (err) {
+      if (!silent) setError(err instanceof Error ? err.message : 'Could not load this order.');
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [orderReference]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const status = order?.status ?? 'pending';
+  const isActive = status === 'pending' || status === 'processing' || status === 'shipped';
+
+  // Live updates while the order is moving. A delivered or cancelled order
+  // cannot change again, so polling stops there.
+  useEffect(() => {
+    if (!isActive) return;
+    const timer = window.setInterval(() => void load(true), 15000);
+    const onFocus = () => void load(true);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [isActive, load]);
+
+  const payments = order?.payments ?? [];
+  const settled = payments.some((payment) => payment.status === 'succeeded' || payment.status === 'cod');
+  const awaitingApproval = payments.some(
+    (payment) => payment.status === 'pending' || payment.status === 'awaiting_approval' || payment.status === 'processing',
+  );
+  const needsPayment = status === 'pending' && !settled;
+
+  const reachedIndex = useMemo(() => {
+    const index = STEPS.findIndex((step) => step.key === status);
+    return index === -1 ? 0 : index;
+  }, [status]);
+
+  const whenFor = (key: string) => order?.timeline.find((event) => event.toStatus === key)?.at ?? null;
+
+  const address = order?.shippingAddress;
+  const addressLines = [
+    address?.fullName || customerInfo.fullName,
+    address?.address || customerInfo.address,
+    [
+      address?.village || customerInfo.village,
+      address?.parish || customerInfo.parish,
+      address?.subCounty || customerInfo.subCounty,
+      address?.district || customerInfo.district,
+    ]
+      .filter(Boolean)
+      .join(', '),
+    address?.region || customerInfo.region,
+    address?.phone || customerInfo.phone,
+  ].filter((line) => typeof line === 'string' && line.trim() !== '');
+
+  const deliveryDistrict = address?.district || order?.district || customerInfo.district;
+  const deliveryRegion = address?.region || order?.region || customerInfo.region;
+  const copy = STATUS_COPY[status] ?? STATUS_COPY.pending;
+  const itemCount = order?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
 
   return (
     <div className="bg-[#ffffff] relative size-full">
-      {/* Status Bar */}
       <StatusBar />
-      
-      {/* Header */}
-      <Header 
+
+      <Header
         cartCount={cartCount}
         onShop={onShop}
         onMenuClick={onMenuClick}
+        title={status === 'delivered' ? 'Delivered' : status === 'cancelled' ? 'Cancelled' : 'Track order'}
       />
-      
-      {/* Content */}
+
       <div className="absolute left-6 right-6 top-[149px] bottom-[124px] overflow-y-auto">
         <div className="py-6 space-y-6">
-          
-          {/* Status Message */}
-          <div className="flex items-center gap-3">
-            <div className="size-8 rounded-full bg-[#426b1f] flex items-center justify-center shrink-0">
-              <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
+          {loading && (
+            <div className="space-y-3">
+              <div className="h-6 w-2/3 bg-neutral-100 rounded animate-pulse" />
+              <div className="h-4 w-1/2 bg-neutral-100 rounded animate-pulse" />
+              <div className="h-40 bg-neutral-100 rounded-xl animate-pulse" />
+              <div className="h-28 bg-neutral-100 rounded-xl animate-pulse" />
             </div>
-            <div>
-              <h1 className="font-['Newsreader:Regular',_sans-serif] text-[24px] text-[#426b1f] tracking-[-0.48px] leading-[30px]">
-                Your order is being prepared
-              </h1>
-              {orderReference && <p className="mt-1 text-xs text-neutral-600">Order reference: {orderReference}</p>}
+          )}
+
+          {!loading && error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+              <p className="text-[13px] text-red-700">{error}</p>
+              <button
+                onClick={() => void load()}
+                className="text-[13px] font-medium text-[#426b1f] hover:underline"
+              >
+                Try again
+              </button>
             </div>
-          </div>
+          )}
 
-          {/* Delivery location, on a real map centred on the chosen district */}
-          <DeliveryLocationMap
-            district={customerInfo.district}
-            region={customerInfo.region}
-            address={customerInfo.address}
-          />
+          {!loading && !error && (
+            <>
+              {/* Status hero */}
+              <div className="flex items-start gap-3">
+                <div
+                  className={`size-8 rounded-full flex items-center justify-center shrink-0 ${
+                    status === 'cancelled' ? 'bg-red-600' : 'bg-[#426b1f]'
+                  }`}
+                >
+                  {status === 'cancelled' ? (
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  ) : (
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h1
+                    className={`font-['Newsreader:Regular',_sans-serif] text-[24px] tracking-[-0.48px] leading-[30px] ${
+                      status === 'cancelled' ? 'text-red-700' : 'text-[#426b1f]'
+                    }`}
+                  >
+                    {copy.title}
+                  </h1>
+                  <p className="mt-1 text-[13px] text-neutral-600 leading-[18px]">{copy.subtitle}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-neutral-500">
+                    {orderReference && <span>Order {orderReference}</span>}
+                    {isActive && (
+                      <span className="inline-flex items-center gap-1 text-[#426b1f]">
+                        <span className="size-1.5 rounded-full bg-[#426b1f] animate-pulse" />
+                        Updates automatically
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-          {/* Two-Column Delivery Info Grid matching Figma MyBasket-2001-1785 */}
-          <div className="grid grid-cols-2 gap-4 pt-1 border-t border-neutral-100">
-            {/* Delivery To */}
-            <div>
-              <h3 className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] tracking-[-0.14px] leading-[24px] mb-1">
-                Delivery to
-              </h3>
-              <div className="space-y-0.5">
-                {formattedAddress.map((line, index) => (
-                  <p key={index} className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#000000] tracking-[-0.14px] leading-[22px]">
-                    {line}
+              {/* Payment call to action */}
+              {needsPayment && onPay && (
+                <div className="bg-[#426b1f]/5 border border-[#426b1f]/20 rounded-xl p-4 space-y-2">
+                  <h3 className="font-['Inter:Medium',_sans-serif] text-[14px] text-[#000000]">
+                    {awaitingApproval ? 'Payment is waiting for approval' : 'Payment is still due'}
+                  </h3>
+                  <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] leading-[18px]">
+                    {awaitingApproval
+                      ? 'Approve the prompt on your phone, or start a fresh attempt if it expired.'
+                      : 'Your produce is reserved until the order is paid for. Unpaid orders are released after 15 minutes.'}
                   </p>
-                ))}
-              </div>
-            </div>
-            
-            {/* Estimated Delivery */}
-            <div>
-              <h3 className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] tracking-[-0.14px] leading-[24px] mb-1">
-                Estimated delivery
-              </h3>
-              <p className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#000000] tracking-[-0.14px] leading-[22px]">
-                {estimatedDelivery}
-              </p>
-              <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#426b1f] mt-2 font-medium">
-                Standard Eco Courier • Tracking enabled
-              </p>
-            </div>
-          </div>
+                  <button
+                    onClick={onPay}
+                    className="w-full bg-[#426b1f] text-white rounded-lg py-2.5 text-[14px] font-['Inter:Medium',_sans-serif] hover:bg-[#355a19] transition-colors"
+                  >
+                    {awaitingApproval ? 'Review payment' : `Pay ${order ? formatUgx(order.total) : 'now'}`}
+                  </button>
+                </div>
+              )}
 
-          {/* What happens next timeline */}
-          <div className="bg-[#f8f9fa] rounded-xl p-4 space-y-3 border border-neutral-200">
-            <h3 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000] tracking-[-0.16px]">
-              What happens next?
-            </h3>
-            <div className="space-y-2.5">
-              <div className="flex items-start gap-3">
-                <div className="size-2.5 bg-[#426b1f] rounded-full mt-1.5 shrink-0" />
-                <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#000000] leading-[18px]">
-                  Harvested & curated by our regional growers
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="size-2.5 bg-[#426b1f]/40 rounded-full mt-1.5 shrink-0" />
-                <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[18px]">
-                  Packed in 100% compostable insulated box
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="size-2.5 bg-neutral-300 rounded-full mt-1.5 shrink-0" />
-                <p className="font-['Inter:Regular',_sans-serif] text-[13px] text-[#757575] leading-[18px]">
-                  Delivered contact-free to your doorstep
-                </p>
-              </div>
-            </div>
-          </div>
+              {/* Progress stepper */}
+              {status === 'cancelled' ? (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <h3 className="font-['Inter:Medium',_sans-serif] text-[14px] text-red-800 mb-1">Order cancelled</h3>
+                  <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-red-700 leading-[18px]">
+                    {order?.timeline.find((event) => event.toStatus === 'cancelled')?.note ??
+                      'This order will not be delivered.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-[#f8f9fa] rounded-xl p-4 border border-neutral-200">
+                  <h3 className="font-['Inter:Medium',_sans-serif] text-[15px] text-[#000000] mb-4">
+                    Delivery progress
+                  </h3>
+                  <ol className="space-y-0">
+                    {STEPS.map((step, index) => {
+                      const done = index < reachedIndex;
+                      const current = index === reachedIndex;
+                      const when = whenFor(step.key);
+                      const last = index === STEPS.length - 1;
+                      return (
+                        <li key={step.key} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <div
+                              className={`size-6 rounded-full flex items-center justify-center shrink-0 border-2 ${
+                                done
+                                  ? 'bg-[#426b1f] border-[#426b1f]'
+                                  : current
+                                    ? 'bg-white border-[#426b1f]'
+                                    : 'bg-white border-neutral-300'
+                              }`}
+                            >
+                              {done ? (
+                                <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                </svg>
+                              ) : (
+                                <span className={`size-2 rounded-full ${current ? 'bg-[#426b1f]' : 'bg-neutral-300'}`} />
+                              )}
+                            </div>
+                            {!last && (
+                              <div className={`w-0.5 flex-1 min-h-[26px] ${done ? 'bg-[#426b1f]' : 'bg-neutral-200'}`} />
+                            )}
+                          </div>
+                          <div className={`pb-4 ${last ? 'pb-0' : ''}`}>
+                            <p
+                              className={`font-['Inter:Medium',_sans-serif] text-[13px] leading-[18px] ${
+                                done || current ? 'text-[#000000]' : 'text-[#9a9a9a]'
+                              }`}
+                            >
+                              {step.label}
+                            </p>
+                            <p className="font-['Inter:Regular',_sans-serif] text-[12px] leading-[17px] text-[#757575]">
+                              {step.description}
+                            </p>
+                            {when && (
+                              <p className="font-['Inter:Regular',_sans-serif] text-[11px] text-[#9a9a9a] mt-0.5">
+                                {formatWhen(when)}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
 
+              {/* Basket summary */}
+              {order && (
+                <div className="border border-neutral-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-['Inter:Medium',_sans-serif] text-[14px] text-[#000000]">Your basket</h3>
+                    <span className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575]">
+                      {itemCount} item{itemCount === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {order.items.map((item) => (
+                      <div key={item.id} className="flex justify-between gap-2 font-['Inter:Regular',_sans-serif] text-[13px]">
+                        <span className="text-[#000000] truncate">
+                          {item.quantity} × {item.name}
+                        </span>
+                        <span className="text-[#757575] whitespace-nowrap">{formatUgx(item.lineTotal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pt-2 border-t border-neutral-100 space-y-1 font-['Inter:Regular',_sans-serif] text-[12px]">
+                    <div className="flex justify-between text-[#757575]">
+                      <span>Subtotal</span>
+                      <span>{formatUgx(order.subtotal)}</span>
+                    </div>
+                    {order.discount > 0 && (
+                      <div className="flex justify-between text-[#426b1f]">
+                        <span>{order.promoCode ? `Discount · ${order.promoCode}` : 'Discount'}</span>
+                        <span>− {formatUgx(order.discount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-[#757575]">
+                      <span>Delivery</span>
+                      <span>{formatUgx(order.shipping)}</span>
+                    </div>
+                    <div className="flex justify-between text-[#000000] font-medium text-[14px] pt-1">
+                      <span>Total</span>
+                      <span>{formatUgx(order.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Delivery location */}
+              <DeliveryLocationMap district={deliveryDistrict} region={deliveryRegion} address={address?.address || customerInfo.address} />
+
+              <div className="grid grid-cols-2 gap-4 pt-1 border-t border-neutral-100">
+                <div>
+                  <h3 className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] tracking-[-0.14px] leading-[24px] mb-1">
+                    Delivery to
+                  </h3>
+                  <div className="space-y-0.5">
+                    {addressLines.map((line, index) => (
+                      <p
+                        key={index}
+                        className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#000000] tracking-[-0.14px] leading-[22px]"
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#757575] tracking-[-0.14px] leading-[24px] mb-1">
+                    Placed
+                  </h3>
+                  <p className="font-['Inter:Regular',_sans-serif] text-[14px] text-[#000000] tracking-[-0.14px] leading-[22px]">
+                    {order ? formatWhen(order.createdAt) : '—'}
+                  </p>
+                  <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#426b1f] mt-2 font-medium">
+                    Standard Eco Courier • Tracking enabled
+                  </p>
+                </div>
+              </div>
+
+              {/* Status history */}
+              {order && order.timeline.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="font-['Inter:Medium',_sans-serif] text-[14px] text-[#000000]">Order updates</h3>
+                  <div className="divide-y divide-neutral-100 border border-neutral-200 rounded-xl overflow-hidden">
+                    {order.timeline
+                      .slice()
+                      .reverse()
+                      .map((event) => (
+                        <div key={event.id} className="p-3 bg-white">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-['Inter:Medium',_sans-serif] text-[12px] text-[#000000] capitalize">
+                              {event.toStatus}
+                            </span>
+                            <span className="font-['Inter:Regular',_sans-serif] text-[11px] text-[#9a9a9a]">
+                              {formatWhen(event.at)}
+                            </span>
+                          </div>
+                          {event.note && (
+                            <p className="font-['Inter:Regular',_sans-serif] text-[12px] text-[#757575] mt-0.5 leading-[17px]">
+                              {event.note}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
-      
-      {/* Footer */}
+
       <Footer onShop={onShop} />
     </div>
   );
@@ -244,13 +495,14 @@ interface HeaderProps {
   cartCount: number;
   onShop: () => void;
   onMenuClick: () => void;
+  title: string;
 }
 
-function Header({ cartCount, onShop, onMenuClick }: HeaderProps) {
+function Header({ cartCount, onShop, onMenuClick, title }: HeaderProps) {
   return (
     <div className="absolute bg-[#ffffff] h-[149px] left-0 right-0 top-0">
       <div className="absolute border-[0px_0px_1px] border-neutral-200 border-solid inset-0 pointer-events-none shadow-[0px_0px_20px_0px_rgba(0,0,0,0.1)]" />
-      
+
       {/* Mobile Nav */}
       <div className="absolute bg-[#ffffff] h-16 left-0 overflow-clip right-0 top-[31px]">
         <div className="absolute bg-[#ffffff] h-[66px] left-0 top-0 w-[393px]" />
@@ -260,7 +512,7 @@ function Header({ cartCount, onShop, onMenuClick }: HeaderProps) {
         >
           <p className="adjustLetterSpacing block leading-none whitespace-pre text-[24px]">Mu Katale</p>
         </div>
-        
+
         {/* Cart Icon */}
         <div className="absolute right-5 rounded-2xl size-8 top-[18px]">
           <div className="size-8">
@@ -282,9 +534,9 @@ function Header({ cartCount, onShop, onMenuClick }: HeaderProps) {
             </div>
           )}
         </div>
-        
+
         {/* Menu Icon */}
-        <button 
+        <button
           onClick={onMenuClick}
           className="absolute left-5 rounded-2xl size-8 top-[18px] flex items-center justify-center"
         >
@@ -298,32 +550,32 @@ function Header({ cartCount, onShop, onMenuClick }: HeaderProps) {
           </div>
         </button>
       </div>
-      
-        {/* Sub Nav */}
-        <div className="absolute left-6 right-6 top-[103px]">
-          <div className="box-border content-stretch flex flex-col gap-4 items-end justify-end p-0 relative w-full">
-            <div className="relative shrink-0 w-full">
-              <div className="box-border content-stretch flex flex-row font-normal items-center justify-start leading-[0] p-0 relative text-left w-full">
-                <div className="basis-0 flex flex-col font-['Newsreader:Regular',_sans-serif] grow justify-center min-h-px min-w-px relative shrink-0 text-[#000000] text-[24px] tracking-[-0.48px]">
-                  <p className="block leading-[32px] text-[24px]">Confirmed</p>
-                </div>
-                <button 
-                  onClick={onShop}
-                  className="cursor-pointer flex items-center font-['Inter:Regular',_sans-serif] not-italic relative shrink-0 text-[#426b1f] text-[14px] text-nowrap tracking-[-0.14px] hover:opacity-80 transition-opacity"
-                >
-                  <div className="flex flex-row items-center gap-1">
-                    <div className="w-3 h-3">
-                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
-                        <path d="M7.5 9L4.5 6L7.5 3" stroke="#426b1f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">Shop</p>
-                  </div>
-                </button>
+
+      {/* Sub Nav */}
+      <div className="absolute left-6 right-6 top-[103px]">
+        <div className="box-border content-stretch flex flex-col gap-4 items-end justify-end p-0 relative w-full">
+          <div className="relative shrink-0 w-full">
+            <div className="box-border content-stretch flex flex-row font-normal items-center justify-start leading-[0] p-0 relative text-left w-full">
+              <div className="basis-0 flex flex-col font-['Newsreader:Regular',_sans-serif] grow justify-center min-h-px min-w-px relative shrink-0 text-[#000000] text-[24px] tracking-[-0.48px]">
+                <p className="block leading-[32px] text-[24px]">{title}</p>
               </div>
+              <button
+                onClick={onShop}
+                className="cursor-pointer flex items-center font-['Inter:Regular',_sans-serif] not-italic relative shrink-0 text-[#426b1f] text-[14px] text-nowrap tracking-[-0.14px] hover:opacity-80 transition-opacity"
+              >
+                <div className="flex flex-row items-center gap-1">
+                  <div className="w-3 h-3">
+                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 12 12">
+                      <path d="M7.5 9L4.5 6L7.5 3" stroke="#426b1f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <p className="adjustLetterSpacing block leading-[24px] whitespace-pre">Shop</p>
+                </div>
+              </button>
             </div>
           </div>
         </div>
+      </div>
     </div>
   );
 }
