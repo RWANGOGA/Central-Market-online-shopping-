@@ -20,8 +20,7 @@ export async function POST(request: Request) {
     const p = await tx.query.payments.findFirst({ where: eq(payments.providerRef, evt.ref) });
     if (!p || p.status === 'succeeded') return;
     if (evt.amount !== p.amount || evt.currency !== p.currency) {
-      await tx.update(payments).set({ status: 'mismatch' }).where(eq(payments.id, p.id));
-      return;
+      return; // wrong amount: leave payment pending for review
     }
     await tx.update(payments).set({ status: 'succeeded' }).where(eq(payments.id, p.id));
     if (p.orderId) {

@@ -1,8 +1,13 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
+import { env } from '@/lib/env';
 
-const connectionString = process.env.DATABASE_URL;
+/** Validates required secrets at boot so a missing value stops the server
+ *  instead of falling back silently into an insecure default. */
+void env;
+
+const connectionString = env.DATABASE_URL;
 if (!connectionString) {
   throw new Error('DATABASE_URL is required. Configure a PostgreSQL connection before starting the API.');
 }
