@@ -17,9 +17,9 @@ import { orderStatusEvents, orders } from './schema';
 async function backfill() {
   console.log('Backfilling denormalised order columns...');
 
-  // libsql reports the affected count as rowsAffected; drizzle's type for
+  // libsql reports the affected count as rowCount; drizzle's type for
   // this call omits it, so read defensively rather than logging undefined.
-  const result = (await db.run(sql`
+  const result = (await db.execute(sql`
     UPDATE orders
     SET
       customer_name = COALESCE(
@@ -45,9 +45,9 @@ async function backfill() {
     WHERE customer_name IS NULL
        OR phone IS NULL
        OR region IS NULL
-  `)) as { rowsAffected?: number; changes?: number };
+  `)) as { rowCount?: number; changes?: number };
 
-  const updated = result?.rowsAffected ?? result?.changes ?? 0;
+  const updated = result?.rowCount ?? result?.changes ?? 0;
   console.log(`  ${updated} order row(s) backfilled.`);
 
   const counts = await db

@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { productPriceHistory, products } from '@/db/schema';
+import { productPriceHistory, products, nowText } from '@/db/schema';
 import { requireAdmin, priceLabelFor } from '@/lib/catalogue';
 import { error, json } from '@/lib/http';
 
@@ -42,7 +42,7 @@ export async function PATCH(request: Request) {
     }
 
     const set: Partial<typeof products.$inferInsert> = {};
-    set.updatedAt = sql`datetime('now')` as unknown as string;
+    set.updatedAt = nowText as unknown as string;
 
     let priceChanged = false;
     let unitChanged = false;

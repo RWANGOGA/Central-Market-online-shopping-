@@ -1,8 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+import { boolean, doublePrecision, index, integer, jsonb, pgTable, serial, text, unique } from 'drizzle-orm/pg-core';
 
-export const products = sqliteTable('products', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+/** UTC timestamp as 'YYYY-MM-DD HH:MM:SS', the format every query and comparison in the app expects. */
+export const nowText = sql`to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')`;
+
+export const products = pgTable('products', {
+  id: serial('id').primaryKey(),
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
   description: text('description').notNull(),
@@ -12,8 +15,8 @@ export const products = sqliteTable('products', {
   priceLabel: text('price_label').notNull(),
   currency: text('currency').notNull().default('UGX'),
   unit: text('unit').notNull(),
-  imageFiles: text('image_files', { mode: 'json' }).notNull().$type<string[]>(),
-  dietary: text('dietary', { mode: 'json' }).notNull().$type<string[]>(),
+  imageFiles: jsonb('image_files').notNull().$type<string[]>(),
+  dietary: jsonb('dietary').notNull().$type<string[]>(),
   /**
    * A cached total. The authoritative record is the sum of stock_movements,
    * which is what makes stock reconcilable rather than merely a number.
@@ -29,10 +32,10 @@ export const products = sqliteTable('products', {
   supplierId: integer('supplier_id').references(() => suppliers.id, {
     onDelete: 'set null',
   }),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  active: boolean('active').notNull().default(true),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
   /**
    * Updated by the application on every PATCH. Used for optimistic concurrency:
    * the client sends the value it last saw, and a mismatch returns 409.
@@ -54,8 +57,8 @@ export const products = sqliteTable('products', {
  * stores the before and after so the full history is queryable without parsing
  * product revisions.
  */
-export const productPriceHistory = sqliteTable('product_price_history', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const productPriceHistory = pgTable('product_price_history', {
+  id: serial('id').primaryKey(),
   productId: integer('product_id')
     .notNull()
     .references(() => products.id, { onDelete: 'cascade' }),
@@ -68,7 +71,7 @@ export const productPriceHistory = sqliteTable('product_price_history', {
   changedByEmail: text('changed_by_email'),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 }, (table) => [
   index('idx_price_history_product').on(table.productId, table.createdAt),
 ]);
@@ -83,8 +86,8 @@ export const productPriceHistory = sqliteTable('product_price_history', {
  * present must belong to the level above it; api/src/lib/locationGuard.ts
  * enforces that on every write.
  */
-export const customers = sqliteTable('customers', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const customers = pgTable('customers', {
+  id: serial('id').primaryKey(),
   fullName: text('full_name').notNull(),
   phone: text('phone').notNull().unique(),
   email: text('email').unique(),
@@ -95,14 +98,14 @@ export const customers = sqliteTable('customers', {
   parish: text('parish'),
   village: text('village'),
   address: text('address').notNull(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  active: boolean('active').notNull().default(true),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
 
-export const customerSessions = sqliteTable('customer_sessions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const customerSessions = pgTable('customer_sessions', {
+  id: serial('id').primaryKey(),
   customerId: integer('customer_id')
     .notNull()
     .references(() => customers.id, { onDelete: 'cascade' }),
@@ -111,29 +114,31 @@ export const customerSessions = sqliteTable('customer_sessions', {
   expiresAt: text('expires_at').notNull(),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
 
-export const carts = sqliteTable('carts', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const carts = pgTable('carts', {
+  id: serial('id').primaryKey(),
   customerId: integer('customer_id').references(() => customers.id, {
     onDelete: 'set null',
   }),
   status: text('status', {
-    enum: ['active', 'converted', 'abandoned'],
+    enum: ['active', 'checkout', 'converted', 'abandoned'],
   })
     .notNull()
     .default('active'),
+  /** SHA-256 of the mk_cart cookie. Only the holder of that cookie can read or change the cart. */
+  ownerTokenHash: text('owner_token_hash'),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
   updatedAt: text('updated_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
 
-export const cartItems = sqliteTable('cart_items', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const cartItems = pgTable('cart_items', {
+  id: serial('id').primaryKey(),
   cartId: integer('cart_id')
     .notNull()
     .references(() => carts.id, { onDelete: 'cascade' }),
@@ -143,7 +148,7 @@ export const cartItems = sqliteTable('cart_items', {
   quantity: integer('quantity').notNull().default(1),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
 
 /**
@@ -154,16 +159,16 @@ export const cartItems = sqliteTable('cart_items', {
  * The first account is seeded from ADMIN_EMAIL and ADMIN_PASSWORD in the
  * environment. No credential is committed to the repository.
  */
-export const admins = sqliteTable('admins', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const admins = pgTable('admins', {
+  id: serial('id').primaryKey(),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['owner', 'manager'] }).notNull().default('manager'),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  active: boolean('active').notNull().default(true),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
   lastLoginAt: text('last_login_at'),
 });
 
@@ -171,8 +176,8 @@ export const admins = sqliteTable('admins', {
  * An opaque session. The token itself is never stored, only its SHA-256, so a
  * database copy cannot be used to sign in.
  */
-export const adminSessions = sqliteTable('admin_sessions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const adminSessions = pgTable('admin_sessions', {
+  id: serial('id').primaryKey(),
   adminId: integer('admin_id')
     .notNull()
     .references(() => admins.id, { onDelete: 'cascade' }),
@@ -180,7 +185,7 @@ export const adminSessions = sqliteTable('admin_sessions', {
   expiresAt: text('expires_at').notNull(),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
   userAgent: text('user_agent'),
 });
 
@@ -189,13 +194,13 @@ export const adminSessions = sqliteTable('admin_sessions', {
  * database rather than in memory so a restart does not hand an attacker a fresh
  * allowance.
  */
-export const adminLoginAttempts = sqliteTable('admin_login_attempts', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const adminLoginAttempts = pgTable('admin_login_attempts', {
+  id: serial('id').primaryKey(),
   email: text('email').notNull(),
-  succeeded: integer('succeeded', { mode: 'boolean' }).notNull().default(false),
+  succeeded: boolean('succeeded').notNull().default(false),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
 
 /**
@@ -206,56 +211,58 @@ export const adminLoginAttempts = sqliteTable('admin_login_attempts', {
  * and the export endpoint can answer "who did what, and when" without
  * reconstructing it from business tables.
  */
-export const adminActivityLog = sqliteTable('admin_activity_log', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const adminActivityLog = pgTable('admin_activity_log', {
+  id: serial('id').primaryKey(),
   adminId: integer('admin_id').references(() => admins.id, { onDelete: 'set null' }),
   action: text('action').notNull(),
   entity: text('entity').notNull(),
   entityId: text('entity_id'),
-  before: text('before', { mode: 'json' }),
-  after: text('after', { mode: 'json' }),
+  before: jsonb('before'),
+  after: jsonb('after'),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 }, (table) => [
   index('idx_activity_admin').on(table.adminId, table.createdAt),
   index('idx_activity_entity').on(table.entity, table.entityId),
 ]);
 
-export const customerPreferences = sqliteTable('customer_preferences', {
+export const customerPreferences = pgTable('customer_preferences', {
   customerId: integer('customer_id')
     .notNull()
     .references(() => customers.id, { onDelete: 'cascade' }),
-  preferences: text('preferences', { mode: 'json' }).notNull().default('{}'),
+  preferences: jsonb('preferences').notNull().default({}),
   updatedAt: text('updated_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 }, (table) => [
   index('idx_customer_preferences_customer').on(table.customerId),
 ]);
 
-export const notifications = sqliteTable('notifications', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const notifications = pgTable('notifications', {
+  id: serial('id').primaryKey(),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
   adminId: integer('admin_id').references(() => admins.id, { onDelete: 'cascade' }),
   type: text('type').notNull(),
   title: text('title').notNull(),
   message: text('message').notNull(),
-  read: integer('read', { mode: 'boolean' }).notNull().default(false),
+  read: boolean('read').notNull().default(false),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 }, (table) => [
   index('idx_notifications_customer').on(table.customerId, table.createdAt),
   index('idx_notifications_admin').on(table.adminId, table.createdAt),
 ]);
 
-export const orders = sqliteTable('orders', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const orders = pgTable('orders', {
+  id: serial('id').primaryKey(),
   reference: text('reference').notNull().unique(),
-  customerId: integer('customer_id')
-    .notNull()
-    .references(() => customers.id),
+  /** Null for guest orders; guests prove ownership with the tracking token instead. */
+  customerId: integer('customer_id').references(() => customers.id),
+  cartId: integer('cart_id').references(() => carts.id, { onDelete: 'set null' }),
+  /** SHA-256 of the one-time guest tracking token. */
+  trackingTokenHash: text('tracking_token_hash'),
   /**
    * Fulfilment only. Money lives on payments.status, so a paid order that has
    * not shipped is simply "processing" rather than a separate paid state.
@@ -270,7 +277,7 @@ export const orders = sqliteTable('orders', {
   tax: integer('tax').notNull().default(0),
   total: integer('total').notNull(),
   currency: text('currency').notNull().default('UGX'),
-  shippingAddress: text('shipping_address', { mode: 'json' }).notNull().$type<{
+  shippingAddress: jsonb('shipping_address').notNull().$type<{
     fullName: string;
     phone: string;
     address: string;
@@ -294,10 +301,10 @@ export const orders = sqliteTable('orders', {
 
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
   updatedAt: text('updated_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 }, (table) => [
   // Phase 4 reads these constantly. Without them every revenue-by-day query is
   // a full table scan.
@@ -315,8 +322,8 @@ export const orders = sqliteTable('orders', {
  * so it is written in the same transaction as the status change. `adminEmail`
  * is stored rather than joined, so the trail survives an admin being removed.
  */
-export const orderStatusEvents = sqliteTable('order_status_events', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const orderStatusEvents = pgTable('order_status_events', {
+  id: serial('id').primaryKey(),
   orderId: integer('order_id')
     .notNull()
     .references(() => orders.id, { onDelete: 'cascade' }),
@@ -329,13 +336,13 @@ export const orderStatusEvents = sqliteTable('order_status_events', {
   changedByEmail: text('changed_by_email'),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 }, (table) => [
   index('idx_order_events_order').on(table.orderId, table.createdAt),
 ]);
 
-export const orderItems = sqliteTable('order_items', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const orderItems = pgTable('order_items', {
+  id: serial('id').primaryKey(),
   orderId: integer('order_id')
     .notNull()
     .references(() => orders.id, { onDelete: 'cascade' }),
@@ -356,21 +363,21 @@ export const orderItems = sqliteTable('order_items', {
  * ordered and received, not what was paid, and the price per unit lives on
  * the purchase order line so a later supplier change does not rewrite history.
  */
-export const suppliers = sqliteTable('suppliers', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const suppliers = pgTable('suppliers', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   contactName: text('contact_name'),
   phone: text('phone'),
   district: text('district'),
   region: text('region'),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  active: boolean('active').notNull().default(true),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
 
-export const purchaseOrders = sqliteTable('purchase_orders', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const purchaseOrders = pgTable('purchase_orders', {
+  id: serial('id').primaryKey(),
   reference: text('reference').notNull().unique(),
   supplierId: integer('supplier_id')
     .notNull()
@@ -386,11 +393,11 @@ export const purchaseOrders = sqliteTable('purchase_orders', {
   }),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
 
-export const purchaseOrderItems = sqliteTable('purchase_order_items', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const purchaseOrderItems = pgTable('purchase_order_items', {
+  id: serial('id').primaryKey(),
   purchaseOrderId: integer('purchase_order_id')
     .notNull()
     .references(() => purchaseOrders.id, { onDelete: 'cascade' }),
@@ -415,8 +422,8 @@ export const purchaseOrderItems = sqliteTable('purchase_order_items', {
  * is what turns "27" into an explanation, and it is checkable at any moment
  * with the reconciliation query on /api/admin/inventory/reconciliation.
  */
-export const stockMovements = sqliteTable('stock_movements', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const stockMovements = pgTable('stock_movements', {
+  id: serial('id').primaryKey(),
   productId: integer('product_id')
     .notNull()
     .references(() => products.id),
@@ -434,7 +441,7 @@ export const stockMovements = sqliteTable('stock_movements', {
   actorLabel: text('actor_label'),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 }, (table) => [
   index('idx_movements_product').on(table.productId, table.createdAt),
   index('idx_movements_created').on(table.createdAt),
@@ -452,21 +459,21 @@ export const stockMovements = sqliteTable('stock_movements', {
  * OpenStreetMap. `hasGeometry` records whether real outlines exist for a level
  * so the client never draws an empty polygon and reports it as a data gap.
  */
-export const regions = sqliteTable('regions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const regions = pgTable('regions', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   isoCode: text('iso_code'),
-  centroidLat: real('centroid_lat').notNull(),
-  centroidLng: real('centroid_lng').notNull(),
-  bboxSouth: real('bbox_south').notNull(),
-  bboxWest: real('bbox_west').notNull(),
-  bboxNorth: real('bbox_north').notNull(),
-  bboxEast: real('bbox_east').notNull(),
-  hasGeometry: integer('has_geometry', { mode: 'boolean' }).notNull().default(true),
+  centroidLat: doublePrecision('centroid_lat').notNull(),
+  centroidLng: doublePrecision('centroid_lng').notNull(),
+  bboxSouth: doublePrecision('bbox_south').notNull(),
+  bboxWest: doublePrecision('bbox_west').notNull(),
+  bboxNorth: doublePrecision('bbox_north').notNull(),
+  bboxEast: doublePrecision('bbox_east').notNull(),
+  hasGeometry: boolean('has_geometry').notNull().default(true),
 });
 
-export const districts = sqliteTable('districts', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const districts = pgTable('districts', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   /**
    * Uganda lists its constituted cities and municipalities as separate
@@ -480,39 +487,39 @@ export const districts = sqliteTable('districts', {
   regionId: integer('region_id')
     .notNull()
     .references(() => regions.id, { onDelete: 'cascade' }),
-  centroidLat: real('centroid_lat').notNull(),
-  centroidLng: real('centroid_lng').notNull(),
-  bboxSouth: real('bbox_south').notNull(),
-  bboxWest: real('bbox_west').notNull(),
-  bboxNorth: real('bbox_north').notNull(),
-  bboxEast: real('bbox_east').notNull(),
-  hasGeometry: integer('has_geometry', { mode: 'boolean' }).notNull().default(true),
+  centroidLat: doublePrecision('centroid_lat').notNull(),
+  centroidLng: doublePrecision('centroid_lng').notNull(),
+  bboxSouth: doublePrecision('bbox_south').notNull(),
+  bboxWest: doublePrecision('bbox_west').notNull(),
+  bboxNorth: doublePrecision('bbox_north').notNull(),
+  bboxEast: doublePrecision('bbox_east').notNull(),
+  hasGeometry: boolean('has_geometry').notNull().default(true),
 }, (table) => [
   unique('districts_name_region_kind_unique').on(table.name, table.regionId, table.kind),
 ]);
 
-export const subCounties = sqliteTable('sub_counties', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const subCounties = pgTable('sub_counties', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   districtId: integer('district_id')
     .notNull()
     .references(() => districts.id, { onDelete: 'cascade' }),
-  centroidLat: real('centroid_lat'),
-  centroidLng: real('centroid_lng'),
-  hasGeometry: integer('has_geometry', { mode: 'boolean' }).notNull().default(false),
+  centroidLat: doublePrecision('centroid_lat'),
+  centroidLng: doublePrecision('centroid_lng'),
+  hasGeometry: boolean('has_geometry').notNull().default(false),
 }, (table) => [
   unique('sub_counties_name_district_unique').on(table.name, table.districtId),
 ]);
 
-export const parishes = sqliteTable('parishes', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const parishes = pgTable('parishes', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   subCountyId: integer('sub_county_id')
     .notNull()
     .references(() => subCounties.id, { onDelete: 'cascade' }),
-  centroidLat: real('centroid_lat'),
-  centroidLng: real('centroid_lng'),
-  hasGeometry: integer('has_geometry', { mode: 'boolean' }).notNull().default(false),
+  centroidLat: doublePrecision('centroid_lat'),
+  centroidLng: doublePrecision('centroid_lng'),
+  hasGeometry: boolean('has_geometry').notNull().default(false),
 }, (table) => [
   unique('parishes_name_sub_county_unique').on(table.name, table.subCountyId),
 ]);
@@ -522,13 +529,13 @@ export const parishes = sqliteTable('parishes', {
  * chairperson. Villages are addressed by name and a landmark rather than by
  * outline, which is why there is no geometry.
  */
-export const villages = sqliteTable('villages', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const villages = pgTable('villages', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   parishId: integer('parish_id')
     .notNull()
     .references(() => parishes.id, { onDelete: 'cascade' }),
-  hasGeometry: integer('has_geometry', { mode: 'boolean' }).notNull().default(false),
+  hasGeometry: boolean('has_geometry').notNull().default(false),
 }, (table) => [
   unique('villages_name_parish_unique').on(table.name, table.parishId),
 ]);
@@ -538,15 +545,15 @@ export const villages = sqliteTable('villages', {
  * the customer approves a USSD prompt on their handset, so the intent sits in
  * `pending` until the provider calls back or the client polls.
  */
-export const payments = sqliteTable('payments', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const payments = pgTable('payments', {
+  id: serial('id').primaryKey(),
   reference: text('reference').notNull().unique(),
   orderId: integer('order_id').references(() => orders.id, { onDelete: 'set null' }),
   cartId: integer('cart_id').references(() => carts.id, { onDelete: 'set null' }),
-  channel: text('channel', { enum: ['mobile_money', 'card', 'wallet'] }).notNull(),
+  channel: text('channel', { enum: ['mobile_money', 'card', 'wallet', 'cod'] }).notNull(),
   provider: text('provider').notNull(),
   status: text('status', {
-    enum: ['pending', 'awaiting_approval', 'processing', 'succeeded', 'failed', 'cancelled'],
+    enum: ['pending', 'awaiting_approval', 'processing', 'succeeded', 'failed', 'cancelled', 'cod'],
   })
     .notNull()
     .default('pending'),
@@ -569,11 +576,18 @@ export const payments = sqliteTable('payments', {
   settlementTokenHash: text('settlement_token_hash'),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
   updatedAt: text('updated_at')
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(nowText),
 });
+
+/** Fixed-window counters for rate limiting. Keyed `${scope}:${subject}:${bucket}`. */
+export const rateLimits = pgTable('rate_limits', {
+  id: text('id').primaryKey(),
+  count: integer('count').notNull().default(1),
+  expiresAt: integer('expires_at').notNull(),
+}, (table) => [index('idx_rate_limits_expires').on(table.expiresAt)]);
 
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;

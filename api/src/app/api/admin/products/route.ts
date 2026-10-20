@@ -1,6 +1,6 @@
 import { asc, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { products } from '@/db/schema';
+import { products, nowText } from '@/db/schema';
 import { productInputSchema, priceLabelFor, requireAdmin, slugify } from '@/lib/catalogue';
 import { describeStock, stockState } from '@/lib/stock';
 import { storeProductImage } from '@/lib/uploads';
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       dietary: input.dietary,
       imageFiles,
       active: true,
-      updatedAt: sql`datetime('now')`,
+      updatedAt: nowText,
     })
     .returning();
 

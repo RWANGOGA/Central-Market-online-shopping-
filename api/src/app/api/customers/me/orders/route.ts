@@ -1,6 +1,6 @@
 import { desc, eq, sql, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { customers, orderItems, orderStatusEvents, orders, payments } from '@/db/schema';
+import { customers, orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
 import { getCurrentCustomer } from '@/lib/customerSession';
 import { error, json } from '@/lib/http';
 

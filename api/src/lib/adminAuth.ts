@@ -1,6 +1,6 @@
 import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { adminLoginAttempts, admins, adminSessions } from '@/db/schema';
+import { adminLoginAttempts, admins, adminSessions, nowText } from '@/db/schema';
 import { createSessionToken, hashToken, verifyPassword } from '@/lib/password';
 
 /**
@@ -17,6 +17,11 @@ const SESSION_HOURS = 12;
 /** Failed attempts allowed per email inside the window before locking. */
 const MAX_ATTEMPTS = 8;
 const ATTEMPT_WINDOW_MINUTES = 15;
+
+/** UTC text timestamp comparable with the stored created_at strings. */
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString().replace('T', ' ').slice(0, 19);
+}
 
 export type AdminIdentity = {
   id: number;
@@ -64,7 +69,7 @@ export async function login(
       and(
         eq(adminLoginAttempts.email, normalised),
         eq(adminLoginAttempts.succeeded, false),
-        gt(adminLoginAttempts.createdAt, sql`datetime('now', '-${ATTEMPT_WINDOW_MINUTES} minutes')`),
+        gt(adminLoginAttempts.createdAt, minutesAgo(ATTEMPT_WINDOW_MINUTES)),
       ),
     );
 
@@ -91,7 +96,7 @@ export async function login(
   }
 
   await db.insert(adminLoginAttempts).values({ email: normalised, succeeded: true });
-  await db.update(admins).set({ lastLoginAt: sql`datetime('now')` }).where(eq(admins.id, admin.id));
+  await db.update(admins).set({ lastLoginAt: nowText }).where(eq(admins.id, admin.id));
 
   const { token, tokenHash } = createSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_HOURS * 3600_000).toISOString();
@@ -127,7 +132,7 @@ export async function authenticate(request: Request): Promise<AdminIdentity | nu
   const row = await db.query.adminSessions.findFirst({
     where: and(
       eq(adminSessions.tokenHash, hashToken(token)),
-      gt(adminSessions.expiresAt, sql`datetime('now')`),
+      gt(adminSessions.expiresAt, nowText),
     ),
   });
 
@@ -148,7 +153,7 @@ export async function logout(request: Request): Promise<void> {
 
 /** Remove sessions that have expired. */
 export async function pruneSessions(): Promise<void> {
-  await db.delete(adminSessions).where(lt(adminSessions.expiresAt, sql`datetime('now')`));
+  await db.delete(adminSessions).where(lt(adminSessions.expiresAt, nowText));
 }
 
 export function sessionCookie(token: string, expiresAt: string): string {

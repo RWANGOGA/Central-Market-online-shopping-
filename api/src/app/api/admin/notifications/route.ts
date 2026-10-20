@@ -1,6 +1,6 @@
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { db } from '@/db';
-import { notifications } from '@/db/schema';
+import { notifications, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { error, json } from '@/lib/http';
 

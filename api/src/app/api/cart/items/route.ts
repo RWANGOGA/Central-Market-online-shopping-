@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { cartItems, carts, products } from '@/db/schema';
+import { cartItems, carts, products, nowText } from '@/db/schema';
 import { loadCart } from '@/lib/cart';
 import { error, json } from '@/lib/http';
 
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
   await db
     .update(carts)
-    .set({ updatedAt: sql`datetime('now')` })
+    .set({ updatedAt: nowText })
     .where(eq(carts.id, cartId));
 
   return json({ data: await loadCart(cartId) }, { status: 201 });

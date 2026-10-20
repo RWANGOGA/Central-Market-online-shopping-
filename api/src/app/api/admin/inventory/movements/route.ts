@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { admins, products, stockMovements } from '@/db/schema';
+import { admins, products, stockMovements, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { error, json } from '@/lib/http';
 

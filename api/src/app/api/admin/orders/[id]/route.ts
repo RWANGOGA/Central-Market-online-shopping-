@@ -1,7 +1,7 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { orderItems, orderStatusEvents, orders, payments } from '@/db/schema';
+import { orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { recordMovement } from '@/lib/stockLedger';
 import { ORDER_FLOW, allowedNext, canTransition, isOrderStatus } from '@/lib/orderFlow';
@@ -102,7 +102,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
   const [updated] = await db.transaction(async (tx) => {
     const [row] = await tx
       .update(orders)
-      .set({ status, updatedAt: sql`datetime('now')` })
+      .set({ status, updatedAt: nowText })
       .where(eq(orders.id, existing.id))
       .returning();
 
