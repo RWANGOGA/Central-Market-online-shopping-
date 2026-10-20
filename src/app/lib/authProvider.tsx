@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { navigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { registerAuthHandler } from './apiAuth';
 
 export interface CustomerSession {
@@ -56,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfoState] = useState<CustomerInfo>(EMPTY_INFO);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [orderReference, setOrderReference] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Treat any API 401 as logged out: clear the session and return to the shop.
   useEffect(() => {
