@@ -5,6 +5,7 @@ import DeliveryLocationMap from './DeliveryLocationMap';
 interface OrderConfirmationPageProps {
   cartCount: number;
   customerInfo: CustomerInfo;
+  orderReference: string | null;
   onShop: () => void;
   onMenuClick: () => void;
 }
@@ -20,7 +21,7 @@ interface CustomerInfo {
   address: string;
 }
 
-export default function OrderConfirmationPage({ cartCount, customerInfo, onShop, onMenuClick }: OrderConfirmationPageProps) {
+export default function OrderConfirmationPage({ cartCount, customerInfo, orderReference, onShop, onMenuClick }: OrderConfirmationPageProps) {
   // Generate estimated delivery date (3-5 business days from now)
   const getEstimatedDelivery = () => {
     const today = new Date();
@@ -81,6 +82,7 @@ export default function OrderConfirmationPage({ cartCount, customerInfo, onShop,
               <h1 className="font-['Newsreader:Regular',_sans-serif] text-[24px] text-[#426b1f] tracking-[-0.48px] leading-[30px]">
                 Your order is being prepared
               </h1>
+              {orderReference && <p className="mt-1 text-xs text-neutral-600">Order reference: {orderReference}</p>}
             </div>
           </div>
 

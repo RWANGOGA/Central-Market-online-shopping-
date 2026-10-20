@@ -20,6 +20,7 @@ interface BasketPageProps {
   onMenuClick: () => void;
   onUpdateQuantity: (productId: number, quantity: number) => void;
   onGoToCheckout?: () => void;
+  errorMessage?: string | null;
 }
 
 export default function BasketPage({ 
@@ -27,7 +28,8 @@ export default function BasketPage({
   onBack, 
   onMenuClick, 
   onUpdateQuantity,
-  onGoToCheckout 
+  onGoToCheckout,
+  errorMessage,
 }: BasketPageProps) {
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + (item.priceValue * item.quantity), 0);
@@ -54,6 +56,7 @@ export default function BasketPage({
           {/* Scrollable Content Area */}
           <div className="absolute left-0 right-0 top-[149px] bottom-[124px] overflow-y-auto">
             <div className="px-6 pt-[38px]">
+              {errorMessage && <p role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errorMessage}</p>}
               {/* Product List */}
               <div className="flex flex-col gap-4 mb-6">
                 {cartItems.map((item) => (

@@ -22,9 +22,9 @@ const SALT_LENGTH = 16;
 const COST = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 /** Encoded as "scrypt$N$r$p$saltHex$hashHex" so cost travels with the hash. */
-export async function hashPassword(password: string): Promise<string> {
-  if (password.length < 10) {
-    throw new Error('Use a password of at least 10 characters.');
+export async function hashPassword(password: string, minimumLength = 10): Promise<string> {
+  if (password.length < minimumLength) {
+    throw new Error(`Use a password of at least ${minimumLength} characters.`);
   }
 
   const salt = randomBytes(SALT_LENGTH);

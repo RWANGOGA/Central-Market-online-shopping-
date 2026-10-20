@@ -148,8 +148,8 @@ export async function signupCustomer(data: {
   region: string;
   district?: string;
   address: string;
-}): Promise<CustomerProfile> {
-  const result = await request<{ data: CustomerProfile }>('/customers/signup', {
+}): Promise<{ message: string }> {
+  const result = await request<{ data: { message: string } }>('/customers/signup', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -160,24 +160,22 @@ export async function logoutCustomer(): Promise<void> {
   await request('/customers/session', { method: 'POST' });
 }
 
-export async function createOrder(cartId: number, customerId: number): Promise<{ reference: string }> {
+export async function createOrder(
+  cartId: number,
+  shipping?: {
+    fullName: string;
+    phone: string;
+    region: string;
+    district?: string;
+    subCounty?: string;
+    parish?: string;
+    village?: string;
+    address: string;
+  },
+): Promise<{ reference: string }> {
   const data = await request<{ data: { reference: string } }>('/orders', {
     method: 'POST',
-    body: JSON.stringify({ cartId, customerId }),
-  });
-  return data.data;
-}
-
-export async function createGuestCustomer(info: {
-  fullName: string;
-  phone: string;
-  region: string;
-  district?: string;
-  address: string;
-}): Promise<{ id: number }> {
-  const data = await request<{ data: { id: number } }>('/customers', {
-    method: 'POST',
-    body: JSON.stringify(info),
+    body: JSON.stringify({ cartId, ...(shipping ? { shipping } : {}) }),
   });
   return data.data;
 }

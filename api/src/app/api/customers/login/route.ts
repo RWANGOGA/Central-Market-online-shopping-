@@ -3,37 +3,45 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { customerSessions, customers } from '@/db/schema';
 import { error, json } from '@/lib/http';
-import { verifyPassword, createSessionToken, sessionCookie, clearedCookie, getSessionExpiry } from '@/lib/customerAuth';
+import { checkCustomerPassword, createSessionToken, sessionCookie, getSessionExpiry } from '@/lib/customerAuth';
+import { pruneExpiredCustomerSessions } from '@/lib/customerSession';
+import { allow } from '@/lib/rateLimit';
+import { getClientIp } from '@/lib/clientIp';
+import { toCustomerDto } from '@/lib/customerDto';
 
 const loginSchema = z.object({
-  phone: z.string().min(10),
-  password: z.string().min(1),
+  phone: z.string().trim().min(10).max(32)
+    .transform((phone) => phone.replace(/[\s()-]/g, '').replace(/^\+?256/, '0'))
+    .refine((phone) => /^07\d{8}$/.test(phone)),
+  password: z.string().min(1).max(100),
 });
+const DUMMY_HASH = 'scrypt$16384$8$1$00000000000000000000000000000000$' +
+  '0000000000000000000000000000000000000000000000000000000000000000' +
+  '0000000000000000000000000000000000000000000000000000000000000000';
 
 export async function POST(request: Request) {
   const parsed = loginSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return error(parsed.error.issues[0]?.message ?? 'Invalid payload', 422);
-  }
+  if (!parsed.success) return error('Phone or password is incorrect', 401);
 
-  const normalised = parsed.data.phone.replace(/[\s()-]/g, '').replace(/^\+?256/, '0');
+  const normalised = parsed.data.phone;
+  const ip = getClientIp(request);
+  const phoneAllowed = await allow(`customer-login-phone:${normalised}`, 10, 15 * 60);
+  const ipAllowed = ip ? await allow(`customer-login-ip:${ip}`, 30, 15 * 60) : true;
+  if (!phoneAllowed || !ipAllowed) return error('Too many login attempts. Try again later.', 429);
+
   const customer = await db.query.customers.findFirst({ where: eq(customers.phone, normalised) });
-  if (!customer) {
-    return error('No account found with this phone number.', 401);
+  const result = await checkCustomerPassword(parsed.data.password, customer?.passwordHash || DUMMY_HASH);
+  if (!customer || !customer.passwordHash || !customer.active || !result.ok) {
+    return error('Phone or password is incorrect', 401);
   }
 
-  if (!customer.active) {
-    return error('This account has been deactivated. Contact support.', 403);
+  if (result.upgrade) {
+    await db.update(customers).set({ passwordHash: result.upgrade }).where(eq(customers.id, customer.id));
   }
 
-  const valid = await verifyPassword(parsed.data.password, customer.passwordHash);
-  if (!valid) {
-    return error('Incorrect password.', 401);
-  }
-
+  await pruneExpiredCustomerSessions();
   const { token, tokenHash } = createSessionToken();
   const expiresAt = getSessionExpiry();
-
   await db.insert(customerSessions).values({
     customerId: customer.id,
     tokenHash,
@@ -42,25 +50,7 @@ export async function POST(request: Request) {
   });
 
   return json(
-    {
-      data: {
-        id: customer.id,
-        fullName: customer.fullName,
-        phone: customer.phone,
-        email: customer.email,
-        region: customer.region,
-        district: customer.district,
-        subCounty: customer.subCounty,
-        parish: customer.parish,
-        village: customer.village,
-        address: customer.address,
-      },
-      meta: { token, expiresAt },
-    },
-    {
-      headers: {
-        'Set-Cookie': sessionCookie(token, expiresAt),
-      },
-    }
+    { data: toCustomerDto(customer) },
+    { headers: { 'Set-Cookie': sessionCookie(token, expiresAt) } },
   );
 }

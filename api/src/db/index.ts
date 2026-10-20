@@ -4,7 +4,17 @@ import * as schema from './schema';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error('DATABASE_URL is not set. Connect the Neon integration or add it to the environment.');
+  throw new Error('DATABASE_URL is required. Configure a PostgreSQL connection before starting the API.');
+}
+
+let databaseProtocol: string;
+try {
+  databaseProtocol = new URL(connectionString).protocol;
+} catch {
+  throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.');
+}
+if (databaseProtocol !== 'postgres:' && databaseProtocol !== 'postgresql:') {
+  throw new Error('DATABASE_URL must use PostgreSQL (postgres:// or postgresql://).');
 }
 
 const globalForDb = globalThis as unknown as { __mkPool?: Pool };

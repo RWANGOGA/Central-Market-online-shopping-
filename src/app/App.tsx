@@ -251,6 +251,8 @@ export default function App() {
   });
 
   const [customerSession, setCustomerSession] = useState<CustomerSession | null>(null);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [orderReference, setOrderReference] = useState<string | null>(null);
 
   // Add to cart overlay state
   const [showOverlay, setShowOverlay] = useState(false);
@@ -478,35 +480,38 @@ export default function App() {
 
   const handleCompletePurchase = async () => {
     const serverCartId = cartIdRef.current;
-    if (serverCartId && cartItems.length > 0) {
-      let customerId = customerSession?.id;
-
-      if (!customerId) {
-        try {
-          const guest = await createGuestCustomer({
-            fullName: customerInfo.fullName.trim() || 'Guest',
-            phone: customerInfo.phone.trim(),
-            region: customerInfo.region || 'Central Region',
-            district: customerInfo.district || undefined,
-            address: customerInfo.address.trim() || 'Not specified',
-          });
-          customerId = guest.id;
-        } catch {
-          // Proceed without linking to a customer record if guest creation fails
-          customerId = undefined;
-        }
-      }
-
-      if (customerId) {
-        try {
-          await createOrder(serverCartId, customerId);
-        } catch {
-          // Don't block the confirmation screen if the order write fails
-        }
-      }
+    setPurchaseError(null);
+    if (!serverCartId || cartItems.length === 0) {
+      setPurchaseError('Your basket could not be checked out. Please refresh and try again.');
+      return;
     }
 
-    // Show order confirmation and clear cart
+    try {
+      const order = await createOrder(serverCartId, customerSession ? undefined : {
+        fullName: customerInfo.fullName.trim(),
+        phone: customerInfo.phone.trim(),
+        region: customerInfo.region,
+        district: customerInfo.district || undefined,
+        subCounty: customerInfo.subCounty || undefined,
+        parish: customerInfo.parish || undefined,
+        village: customerInfo.village || undefined,
+        address: customerInfo.address.trim(),
+      });
+      if (!order.reference) throw new Error('The server did not return an order reference.');
+      setOrderReference(order.reference);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'We could not place your order. Please try again.';
+      setPurchaseError(message);
+      if (message.toLowerCase().includes('sold out')) {
+        setViewMode('basket');
+        fetchStock().then((result) => {
+          if (result) setStockLevels(result.levels);
+        });
+      }
+      return;
+    }
+
+    // Confirmation and local stock updates happen only after the server accepts the order.
     setViewMode('orderConfirmation');
 
     // Reflect the sale immediately rather than waiting for the next poll, so
@@ -569,20 +574,6 @@ export default function App() {
     setViewMode('profile');
   };
 
-  const handleSignupSuccess = (customer: CustomerSession) => {
-    setCustomerSession(customer);
-    setCustomerInfo({
-      fullName: customer.fullName,
-      phone: customer.phone,
-      region: customer.region,
-      district: customer.district || '',
-      subCounty: customer.subCounty || '',
-      parish: customer.parish || '',
-      village: customer.village || '',
-      address: customer.address,
-    });
-    setViewMode('profile');
-  };
 
   const handleLogout = () => {
     setCustomerSession(null);
@@ -644,6 +635,7 @@ export default function App() {
             onMenuClick={() => setIsNavOpen(true)}
             onUpdateQuantity={updateCartItemQuantity}
             onGoToCheckout={handleGoToCheckout}
+            errorMessage={purchaseError}
           />
         );
       
@@ -697,6 +689,7 @@ export default function App() {
             onMenuClick={() => setIsNavOpen(true)}
             onUpdateQuantity={updateCartItemQuantity}
             onCompletePurchase={handleCompletePurchase}
+            errorMessage={purchaseError}
           />
         );
       
@@ -705,6 +698,7 @@ export default function App() {
           <OrderConfirmationPage
             cartCount={0} // Cart is cleared after purchase
             customerInfo={customerInfo}
+            orderReference={orderReference}
             onShop={handleShopFromOrderConfirmation}
             onMenuClick={() => setIsNavOpen(true)}
           />
@@ -758,7 +752,7 @@ export default function App() {
         return (
           <SignupPage
             onBack={() => setViewMode('list')}
-            onSignup={handleSignupSuccess}
+            onSignup={() => setViewMode('login')}
             onNavigateToLogin={() => setViewMode('login')}
           />
         );
