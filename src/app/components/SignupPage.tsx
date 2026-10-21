@@ -2,16 +2,19 @@ import React, { useState } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { isValidUgandanPhone, normalizeUgandanPhone } from '../lib/uganda';
+import type { CustomerSession } from '../lib/authProvider';
 
 interface SignupPageProps {
   onBack: () => void;
-  onSignup: () => void;
+  /** Called with the new account: signing up signs you straight in. */
+  onSignup: (customer: CustomerSession) => void;
   onNavigateToLogin: () => void;
 }
 
 export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: SignupPageProps) {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,6 +40,12 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
       return;
     }
 
+    if (!email.trim()) {
+      setError('Enter an email address. It is how we reach you if there is a problem with an order.');
+      setLoading(false);
+      return;
+    }
+
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
       setLoading(false);
@@ -55,7 +64,8 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fullName,
-          phone,
+          phone: normalizeUgandanPhone(phone),
+          email: email.trim(),
           password,
           region,
           district: district || undefined,
@@ -70,7 +80,7 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
         return;
       }
 
-      onSignup();
+      onSignup(data.data);
     } catch {
       setError('Could not connect to the server');
     } finally {
@@ -149,6 +159,24 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
 
             <div>
               <label className="text-[12px] text-[#757575] block mb-1 font-['Inter:Regular',_sans-serif]">
+                Email address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-4 py-3 border border-neutral-200 rounded-xl text-[15px]"
+                required
+              />
+              <p className="text-[12px] text-[#9a9a9a] mt-1">
+                We use this to tell you about your orders. Your phone number is what you sign in with, so keep it
+                correct.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-[12px] text-[#757575] block mb-1 font-['Inter:Regular',_sans-serif]">
                 Password
               </label>
               <div className="relative">
@@ -156,7 +184,7 @@ export default function SignupPage({ onBack, onSignup, onNavigateToLogin }: Sign
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   className="w-full px-4 py-3 pr-12 border border-neutral-200 rounded-xl text-[15px]"
                   required
                 />

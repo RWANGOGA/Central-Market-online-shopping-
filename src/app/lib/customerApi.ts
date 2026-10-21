@@ -192,21 +192,6 @@ export async function loginCustomer(phone: string, password: string): Promise<Cu
   return data.data;
 }
 
-export async function signupCustomer(data: {
-  fullName: string;
-  phone: string;
-  password: string;
-  region: string;
-  district?: string;
-  address: string;
-}): Promise<{ message: string }> {
-  const result = await request<{ data: { message: string } }>('/customers/signup', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  return result.data;
-}
-
 export async function logoutCustomer(): Promise<void> {
   await request('/customers/session', { method: 'POST' });
 }

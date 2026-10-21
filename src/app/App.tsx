@@ -285,7 +285,13 @@ function AppShell() {
             element={
               <SignupPage
                 onBack={() => navigate('/')}
-                onSignup={() => navigate('/login')}
+                onSignup={(customer) => {
+                  // The signup response already carries a session cookie, so the
+                  // account is live — sending them to the login page next would
+                  // ask for the password they just chose.
+                  login(customer);
+                  navigate('/');
+                }}
                 onNavigateToLogin={() => navigate('/login')}
               />
             }
