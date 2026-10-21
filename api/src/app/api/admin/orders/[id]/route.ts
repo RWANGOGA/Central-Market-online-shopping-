@@ -1,10 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
+import { orderStatusEvents, orders, payments, nowText, type Order } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { guardAdmin } from '@/lib/adminAuth';
-import { recordMovement } from '@/lib/stockLedger';
+import { cancelOrder } from '@/lib/orderCancellation';
 import { ORDER_FLOW, allowedNext, canTransition, isOrderStatus } from '@/lib/orderFlow';
 import { findOrder, orderDetail } from '@/lib/orderDetail';
 import { error, json } from '@/lib/http';
@@ -100,78 +100,48 @@ export async function PATCH(request: Request, { params }: Ctx) {
     }
   }
 
-  // Cancelling hands the goods back, so stock returns. It goes through the
-  // ledger with a reference to this order rather than being written to
-  // products.stock directly, which is what keeps SUM(delta) equal to the cached
-  // figure. Anything already delivered cannot be returned.
-  const returningStock = status === 'cancelled' && existing.status !== 'delivered';
+  // Cancelling goes down its own path: it also puts the goods back and closes
+  // any payment still in flight. A customer cancelling has to produce exactly
+  // the same result, so both call one helper rather than repeating the steps.
+  const RACED = 'This order changed while you were working on it. Reload and check its current status.';
 
-  const updated = await db.transaction(async (tx) => {
-    // Compare-and-set: the expected status is in the WHERE clause, so a
-    // request racing this one loses instead of applying the transition (and
-    // returning the stock) a second time.
-    const [row] = await tx
-      .update(orders)
-      .set({ status, updatedAt: nowText })
-      .where(and(eq(orders.id, existing.id), eq(orders.status, existing.status)))
-      .returning();
-    if (!row) return null;
+  let updated: Order | null;
+  let stockReturned = false;
 
-    await tx.insert(orderStatusEvents).values({
-      orderId: row.id,
-      fromStatus: existing.status,
-      toStatus: status,
-      note: note ?? null,
-      changedByAdminId: admin.id,
-      changedByEmail: admin.email,
-    });
-
-    if (returningStock) {
-      const lines = await tx.select().from(orderItems).where(eq(orderItems.orderId, row.id));
-      for (const line of lines) {
-        await recordMovement(
-          {
-            productId: line.productId,
-            delta: line.quantity,
-            reason: 'return',
-            reference: row.reference,
-            note: `Returned from cancelled order ${row.reference}`,
-            actorAdminId: admin.id,
-          },
-          tx,
-        );
-      }
-    }
-
-    // An order that is cancelled settles no money: any attempt still in flight
-    // is closed so the dashboard does not show a payment awaiting approval on
-    // a dead order.
-    if (status === 'cancelled') {
-      await tx
-        .update(payments)
-        .set({
-          status: 'cancelled',
-          failureReason: 'Order cancelled',
-          settlementTokenHash: null,
-          updatedAt: nowText,
-        })
-        .where(
-          and(
-            eq(payments.orderId, row.id),
-            inArray(payments.status, ['pending', 'awaiting_approval', 'processing']),
-          ),
-        );
-    }
-
-    return row;
-  });
-
-  if (!updated) {
-    return error(
-      'This order changed while you were working on it. Reload and check its current status.',
-      409,
+  if (status === 'cancelled') {
+    const outcome = await cancelOrder(
+      existing,
+      { kind: 'admin', adminId: admin.id, adminEmail: admin.email },
+      note ?? null,
     );
+    if (!outcome.ok) return error(RACED, 409);
+    updated = outcome.order;
+    stockReturned = outcome.stockReturned;
+  } else {
+    updated = await db.transaction(async (tx) => {
+      // Compare-and-set: the expected status is in the WHERE clause, so a
+      // request racing this one loses instead of applying the transition twice.
+      const [row] = await tx
+        .update(orders)
+        .set({ status, updatedAt: nowText })
+        .where(and(eq(orders.id, existing.id), eq(orders.status, existing.status)))
+        .returning();
+      if (!row) return null;
+
+      await tx.insert(orderStatusEvents).values({
+        orderId: row.id,
+        fromStatus: existing.status,
+        toStatus: status,
+        note: note ?? null,
+        changedByAdminId: admin.id,
+        changedByEmail: admin.email,
+      });
+
+      return row;
+    });
   }
+
+  if (!updated) return error(RACED, 409);
 
   await recordActivity({
     action: 'order.status',
@@ -231,8 +201,8 @@ export async function PATCH(request: Request, { params }: Ctx) {
       previousStatus: existing.status,
       note: note ?? null,
       // Staff need to know the goods went back, not assume it.
-      stockReturned: returningStock,
-      stockReturnNote: returningStock
+      stockReturned,
+      stockReturnNote: stockReturned
         ? 'Each line was returned through the stock ledger, referencing this order.'
         : null,
       // A cancelled order that was already paid still owes the customer money.

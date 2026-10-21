@@ -1,17 +1,28 @@
 import { desc, eq, sql, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { customers, orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
+import {
+  refunds,
+  orderItems,
+  orderStatusEvents,
+  orders,
+  payments,
+  type OrderItem,
+  type OrderStatusEvent,
+  type Payment,
+  type Refund,
+} from '@/db/schema';
 import { getCurrentCustomer } from '@/lib/customerSession';
-import { toPaymentDto } from '@/lib/payments';
-import { toTimelineDto } from '@/lib/orderTimeline';
+import { customerOrderView } from '@/lib/customerOrderView';
 import { error, json } from '@/lib/http';
 
 /**
  * A customer's own order history.
  *
- * Payments are projected through `toPaymentDto`. The raw rows carry the
- * settlement-token hash, the payer's phone and the gateway reference, none of
- * which belongs in a browser response.
+ * Payments are projected through the shared customer view. The raw rows carry
+ * the settlement-token hash, the payer's phone and the gateway reference, none
+ * of which belongs in a browser response, and the derived money summary is the
+ * same one the single-order endpoint computes, so the two screens cannot
+ * disagree about whether an order is paid.
  */
 export async function GET(request: Request) {
   const customer = await getCurrentCustomer(request);
@@ -31,52 +42,53 @@ export async function GET(request: Request) {
 
   const orderIds = ordersList.map((o) => o.id);
 
-  const [allItems, allTimeline, allPayments] = await Promise.all([
+  const [allItems, allTimeline, allPayments, allRefunds] = await Promise.all([
     orderIds.length > 0
       ? db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds))
-      : Promise.resolve([]),
+      : Promise.resolve([] as OrderItem[]),
     orderIds.length > 0
       ? db.select().from(orderStatusEvents).where(inArray(orderStatusEvents.orderId, orderIds))
-      : Promise.resolve([]),
+      : Promise.resolve([] as OrderStatusEvent[]),
     orderIds.length > 0
       ? db.select().from(payments).where(inArray(payments.orderId, orderIds))
-      : Promise.resolve([]),
+      : Promise.resolve([] as Payment[]),
+    orderIds.length > 0
+      ? db.select().from(refunds).where(inArray(refunds.orderId, orderIds))
+      : Promise.resolve([] as Refund[]),
   ]);
 
-  const itemsByOrder = new Map<number, typeof allItems[0][]>();
-  const timelineByOrder = new Map<number, typeof allTimeline[0][]>();
-  const paymentsByOrder = new Map<number, typeof allPayments[0][]>();
+  // Grouping in one pass keeps this at five queries whatever the page size.
+  const itemsByOrder = new Map<number, typeof allItems[number][]>();
+  const timelineByOrder = new Map<number, typeof allTimeline[number][]>();
+  const paymentsByOrder = new Map<number, typeof allPayments[number][]>();
+  const refundsByOrder = new Map<number, typeof allRefunds[number][]>();
 
-  for (const item of allItems) {
-    const arr = itemsByOrder.get(item.orderId) ?? [];
-    arr.push(item);
-    itemsByOrder.set(item.orderId, arr);
-  }
-  for (const ev of allTimeline) {
-    const arr = timelineByOrder.get(ev.orderId) ?? [];
-    arr.push(ev);
-    timelineByOrder.set(ev.orderId, arr);
-  }
-  for (const pay of allPayments) {
-    const key = Number(pay.orderId);
-    const arr = paymentsByOrder.get(key) ?? [];
-    arr.push(pay);
-    paymentsByOrder.set(key, arr);
-  }
+  // `orderId` is nullable on payments, because an intent can be created before
+  // an order exists. Such a row belongs to no order in this list, so it is
+  // dropped rather than filed under a made-up key.
+  const bucket = <T extends { orderId: number | null }>(map: Map<number, T[]>, row: T) => {
+    if (row.orderId == null) return;
+    const arr = map.get(row.orderId) ?? [];
+    arr.push(row);
+    map.set(row.orderId, arr);
+  };
 
-  const data = ordersList.map((order) => {
-    // The tracking hash and staff emails stay on the server; history shows the
-    // same public timeline as the single-order endpoint.
-    const { trackingTokenHash: _trackingTokenHash, ...safe } = order;
-    return {
-      ...safe,
+  for (const row of allItems) bucket(itemsByOrder, row);
+  for (const row of allTimeline) bucket(timelineByOrder, row);
+  for (const row of allPayments) bucket(paymentsByOrder, row);
+  for (const row of allRefunds) bucket(refundsByOrder, row);
+
+  const data = ordersList.map((order) =>
+    customerOrderView({
+      order,
       items: itemsByOrder.get(order.id) ?? [],
-      timeline: (timelineByOrder.get(order.id) ?? [])
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-        .map(toTimelineDto),
-      payments: (paymentsByOrder.get(order.id) ?? []).map(toPaymentDto),
-    };
-  });
+      timeline: (timelineByOrder.get(order.id) ?? []).sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      ),
+      payments: paymentsByOrder.get(order.id) ?? [],
+      refunds: refundsByOrder.get(order.id) ?? [],
+    }),
+  );
 
   const totalRow = await db.select({ total: sql<number>`count(*)` }).from(orders).where(eq(orders.customerId, customer.id));
 
