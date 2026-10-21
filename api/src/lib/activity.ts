@@ -11,6 +11,8 @@ export type ActivityAction =
   | 'product.price_history'
   | 'order.status'
   | 'order.sweep'
+  | 'order.refund'
+  | 'payment.collect'
   | 'inventory.adjust'
   | 'purchase_order.create'
   | 'purchase_order.receive'

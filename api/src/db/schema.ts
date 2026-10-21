@@ -636,6 +636,16 @@ export const payments = pgTable('payments', {
    * intent settles, so the token cannot be replayed.
    */
   settlementTokenHash: text('settlement_token_hash'),
+  /**
+   * Cash on delivery is settled by a member of staff, not by a gateway, so the
+   * person and the moment are recorded here. Gateway settlements leave these
+   * null: the provider reference is the audit trail for those.
+   */
+  settledAt: text('settled_at'),
+  settledByAdminId: integer('settled_by_admin_id').references(() => admins.id, {
+    onDelete: 'set null',
+  }),
+  settledByEmail: text('settled_by_email'),
   createdAt: text('created_at')
     .notNull()
     .default(nowText),
@@ -643,6 +653,42 @@ export const payments = pgTable('payments', {
     .notNull()
     .default(nowText),
 });
+
+/**
+ * Money paid back to a customer.
+ *
+ * Refunds are recorded, not executed: there is no card gateway reachable from
+ * this server, so staff hand the money back (cash, mobile money or a wallet
+ * transfer) and log it here. Keeping them as rows rather than a `refunded`
+ * flag on the payment preserves the history of partial refunds and who
+ * authorised each one.
+ */
+export const refunds = pgTable('refunds', {
+  id: serial('id').primaryKey(),
+  reference: text('reference').notNull().unique(),
+  orderId: integer('order_id')
+    .notNull()
+    .references(() => orders.id, { onDelete: 'cascade' }),
+  /** The payment being paid back, when the money came in through one. */
+  paymentId: integer('payment_id').references(() => payments.id, { onDelete: 'set null' }),
+  amount: integer('amount').notNull(),
+  currency: text('currency').notNull().default('UGX'),
+  method: text('method', { enum: ['cash', 'mobile_money', 'wallet'] }).notNull(),
+  reason: text('reason').notNull(),
+  /** `recorded` is money already handed back; `cancelled` voids a mistaken entry. */
+  status: text('status', { enum: ['recorded', 'cancelled'] })
+    .notNull()
+    .default('recorded'),
+  createdByAdminId: integer('created_by_admin_id').references(() => admins.id, {
+    onDelete: 'set null',
+  }),
+  createdByEmail: text('created_by_email'),
+  createdAt: text('created_at')
+    .notNull()
+    .default(nowText),
+}, (table) => [
+  index('idx_refunds_order').on(table.orderId, table.createdAt),
+]);
 
 /** Fixed-window counters for rate limiting. Keyed `${scope}:${subject}:${bucket}`. */
 export const rateLimits = pgTable('rate_limits', {
@@ -676,6 +722,8 @@ export type Parish = typeof parishes.$inferSelect;
 export type Village = typeof villages.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
+export type Refund = typeof refunds.$inferSelect;
+export type NewRefund = typeof refunds.$inferInsert;
 export type Admin = typeof admins.$inferSelect;
 export type AdminSession = typeof adminSessions.$inferSelect;
 export type AdminLoginAttempt = typeof adminLoginAttempts.$inferSelect;

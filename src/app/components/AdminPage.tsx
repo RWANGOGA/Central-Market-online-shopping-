@@ -49,6 +49,7 @@ import {
   type SupplierRow,
 } from '../lib/adminApi';
 import AdminGate from './AdminGate';
+import OrderQueue from './OrderQueue';
 import StockBadge from './StockBadge';
 import { describeStockOf } from '../lib/stockApi';
 import { formatUgx } from '../lib/currency';
@@ -56,6 +57,7 @@ import { formatUgx } from '../lib/currency';
 const UNITS = ['kg', 'each', 'pint', 'bunch', 'crate'] as const;
 
 type Tab =
+  | 'orders'
   | 'catalogue'
   | 'inventory'
   | 'purchase-orders'
@@ -129,7 +131,7 @@ function StaffShell({
   onSignOut: () => Promise<void>;
   onClose?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>(admin.role === 'staff' ? 'customers' : 'catalogue');
+  const [tab, setTab] = useState<Tab>(admin.role === 'staff' ? 'orders' : 'catalogue');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,6 +152,7 @@ function StaffShell({
   const isStaff = admin.role === 'staff';
 
   const tabs: { value: Tab; label: string; disabled?: boolean }[] = [
+    { value: 'orders', label: 'Orders' },
     ...(isStaff
       ? []
       : [
@@ -230,7 +233,8 @@ function StaffShell({
         )}
       </div>
 
-      <div className="p-4">
+      <div className={tab === 'orders' ? '' : 'p-4'}>
+        {tab === 'orders' && <OrderQueue canRefund={!isStaff} embedded />}
         {tab === 'catalogue' && <CataloguePanel admin={admin} flash={flash} fail={fail} />}
         {tab === 'inventory' && <InventoryPanel flash={flash} fail={fail} />}
         {tab === 'purchase-orders' && <PurchaseOrdersPanel flash={flash} fail={fail} />}

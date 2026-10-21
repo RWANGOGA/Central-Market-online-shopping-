@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, like, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { orderItems, orders } from '@/db/schema';
+import { orderItems, orders, payments, refunds } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
 import { ORDER_FLOW } from '@/lib/orderFlow';
+import { summariseMoney } from '@/lib/orderMoney';
 import { error, json } from '@/lib/http';
 
 /**
@@ -101,21 +102,64 @@ export async function GET(request: Request) {
   ]);
 
   // Line counts for the list, in one query rather than one per order.
-  const lineCounts = rows.length
-    ? await db
-        .select({
-          orderId: orderItems.orderId,
-          lines: count(),
-          units: sql<number>`sum(${orderItems.quantity})`,
-        })
-        .from(orderItems)
-        .where(
-          and(...rows.map((row) => eq(orderItems.orderId, row.id))),
-        )
-        .groupBy(orderItems.orderId)
-    : [];
+  const orderIds = rows.map((row) => row.id);
+
+  const [lineCounts, paymentRows, refundRows] = await Promise.all([
+    rows.length
+      ? db
+          .select({
+            orderId: orderItems.orderId,
+            lines: count(),
+            units: sql<number>`sum(${orderItems.quantity})`,
+          })
+          .from(orderItems)
+          .where(and(...rows.map((row) => eq(orderItems.orderId, row.id))))
+          .groupBy(orderItems.orderId)
+      : Promise.resolve([]),
+    // Money for the whole page in two queries, so each row can show whether
+    // cash is still to be collected or a cancelled order owes a refund.
+    rows.length
+      ? db
+          .select({
+            orderId: payments.orderId,
+            status: payments.status,
+            amount: payments.amount,
+            currency: payments.currency,
+          })
+          .from(payments)
+          .where(inArray(payments.orderId, orderIds))
+      : Promise.resolve([]),
+    rows.length
+      ? db
+          .select({
+            orderId: refunds.orderId,
+            status: refunds.status,
+            amount: refunds.amount,
+          })
+          .from(refunds)
+          .where(inArray(refunds.orderId, orderIds))
+      : Promise.resolve([]),
+  ]);
 
   const byOrder = new Map(lineCounts.map((row) => [row.orderId, row]));
+
+  const paymentsByOrder = new Map<
+    number,
+    { status: (typeof payments.$inferSelect)['status']; amount: number; currency: string }[]
+  >();
+  for (const row of paymentRows) {
+    if (row.orderId == null) continue;
+    const list = paymentsByOrder.get(row.orderId) ?? [];
+    list.push({ status: row.status, amount: row.amount, currency: row.currency });
+    paymentsByOrder.set(row.orderId, list);
+  }
+
+  const refundsByOrder = new Map<number, { status: 'recorded' | 'cancelled'; amount: number }[]>();
+  for (const row of refundRows) {
+    const list = refundsByOrder.get(row.orderId) ?? [];
+    list.push({ status: row.status, amount: row.amount });
+    refundsByOrder.set(row.orderId, list);
+  }
 
   return json({
     data: rows.map((row) => ({
@@ -130,6 +174,11 @@ export async function GET(request: Request) {
       currency: row.currency,
       itemCount: byOrder.get(row.id)?.lines ?? 0,
       unitCount: byOrder.get(row.id)?.units ?? 0,
+      money: summariseMoney(
+        paymentsByOrder.get(row.id) ?? [],
+        refundsByOrder.get(row.id) ?? [],
+        row.status,
+      ),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     })),

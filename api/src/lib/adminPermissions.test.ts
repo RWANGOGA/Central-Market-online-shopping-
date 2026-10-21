@@ -5,6 +5,7 @@ const ALL: Permission[] = [
   'catalogue.write',
   'inventory.write',
   'orders.write',
+  'refunds.write',
   'promos.write',
   'suppliers.write',
   'customers.write',
@@ -22,6 +23,7 @@ describe('admin permissions', () => {
     expect(can('manager', 'catalogue.write')).toBe(true);
     expect(can('manager', 'inventory.write')).toBe(true);
     expect(can('manager', 'orders.write')).toBe(true);
+    expect(can('manager', 'refunds.write')).toBe(true);
     expect(can('manager', 'promos.write')).toBe(true);
     expect(can('manager', 'suppliers.write')).toBe(true);
 
@@ -33,6 +35,8 @@ describe('admin permissions', () => {
 
   it('gives a shop assistant order fulfilment only', () => {
     expect(can('staff', 'orders.write')).toBe(true);
+    // Taking cash is part of delivering; paying it back is not.
+    expect(can('staff', 'refunds.write')).toBe(false);
 
     for (const permission of ALL.filter((item) => item !== 'orders.write')) {
       expect(can('staff', permission)).toBe(false);

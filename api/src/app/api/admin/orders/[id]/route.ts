@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { orderItems, orderStatusEvents, orders, payments, nowText } from '@/db/schema';
@@ -6,6 +6,7 @@ import { requireAdmin } from '@/lib/catalogue';
 import { guardAdmin } from '@/lib/adminAuth';
 import { recordMovement } from '@/lib/stockLedger';
 import { ORDER_FLOW, allowedNext, canTransition, isOrderStatus } from '@/lib/orderFlow';
+import { findOrder, orderDetail } from '@/lib/orderDetail';
 import { error, json } from '@/lib/http';
 import { publishOrderEvent } from '@/lib/orderEvents';
 import { recordActivity } from '@/lib/activity';
@@ -29,13 +30,6 @@ const updateSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
-async function findOrder(id: string) {
-  const key = Number(id);
-  return db.query.orders.findFirst({
-    where: Number.isInteger(key) ? eq(orders.id, key) : eq(orders.reference, id),
-  });
-}
-
 export async function GET(request: Request, { params }: Ctx) {
   const admin = await requireAdmin(request);
   if (!admin) return error('Not signed in', 401);
@@ -44,26 +38,7 @@ export async function GET(request: Request, { params }: Ctx) {
   const order = await findOrder(id);
   if (!order) return error(`Order "${id}" not found`, 404);
 
-  const [lines, orderPayments, timeline] = await Promise.all([
-    db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
-    db.select().from(payments).where(eq(payments.orderId, order.id)),
-    db
-      .select()
-      .from(orderStatusEvents)
-      .where(eq(orderStatusEvents.orderId, order.id))
-      .orderBy(asc(orderStatusEvents.createdAt), asc(orderStatusEvents.id)),
-  ]);
-
-  return json({
-    data: {
-      ...order,
-      items: lines,
-      payments: orderPayments,
-      timeline,
-      // What staff may do next, so the UI does not re-implement the machine.
-      nextStatuses: allowedNext(order.status),
-    },
-  });
+  return json({ data: await orderDetail(order) });
 }
 
 export async function PATCH(request: Request, { params }: Ctx) {
@@ -109,6 +84,19 @@ export async function PATCH(request: Request, { params }: Ctx) {
       .limit(1);
     if (paid.length === 0) {
       return error('This order has not been paid. Take payment before starting fulfilment.', 409);
+    }
+  }
+
+  // Cash on delivery travels with the goods, so the cash must be in the till
+  // before the order is closed as delivered. Collecting it is its own step.
+  if (existing.status === 'shipped' && status === 'delivered') {
+    const cashOutstanding = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(and(eq(payments.orderId, existing.id), eq(payments.status, 'cod')))
+      .limit(1);
+    if (cashOutstanding.length > 0) {
+      return error('Collect the cash for this order before marking it delivered.', 409);
     }
   }
 
@@ -195,11 +183,8 @@ export async function PATCH(request: Request, { params }: Ctx) {
     adminEmail: admin.email,
   });
 
-  const timeline = await db
-    .select()
-    .from(orderStatusEvents)
-    .where(eq(orderStatusEvents.orderId, updated.id))
-    .orderBy(asc(orderStatusEvents.createdAt), asc(orderStatusEvents.id));
+  const detail = await orderDetail(updated);
+  const { money } = detail;
 
   // Tell any open dashboard, so the queue moves without a refresh.
   publishOrderEvent({
@@ -232,13 +217,15 @@ export async function PATCH(request: Request, { params }: Ctx) {
               : 'Order update',
       message:
         status === 'cancelled'
-          ? `Order ${updated.reference} was cancelled. Any stock held for it has been returned.`
+          ? money.refundDue
+            ? `Order ${updated.reference} was cancelled. Any stock held for it has been returned, and we will contact you about your refund.`
+            : `Order ${updated.reference} was cancelled. Any stock held for it has been returned.`
           : `Order ${updated.reference} is now ${status}.`,
     });
   }
 
   return json({
-    data: { ...updated, timeline, nextStatuses: allowedNext(updated.status) },
+    data: detail,
     meta: {
       changedBy: admin.email,
       previousStatus: existing.status,
@@ -248,6 +235,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
       stockReturnNote: returningStock
         ? 'Each line was returned through the stock ledger, referencing this order.'
         : null,
+      // A cancelled order that was already paid still owes the customer money.
+      refundDue: money.refundDue,
+      refundable: money.refundable,
     },
   });
 }

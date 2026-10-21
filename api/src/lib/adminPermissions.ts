@@ -16,6 +16,7 @@ export type Permission =
   | 'catalogue.write'
   | 'inventory.write'
   | 'orders.write'
+  | 'refunds.write'
   | 'promos.write'
   | 'suppliers.write'
   | 'customers.write'
@@ -26,6 +27,7 @@ const MANAGER: readonly Permission[] = [
   'catalogue.write',
   'inventory.write',
   'orders.write',
+  'refunds.write',
   'promos.write',
   'suppliers.write',
 ];
@@ -50,6 +52,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'catalogue.write': 'change the catalogue',
   'inventory.write': 'adjust stock',
   'orders.write': 'update orders',
+  'refunds.write': 'record refunds',
   'promos.write': 'change promo codes',
   'suppliers.write': 'change suppliers or purchase orders',
   'customers.write': 'change customer access',
