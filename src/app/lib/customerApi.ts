@@ -18,6 +18,26 @@ export interface CustomerProfile {
   lastOrderAt?: string;
 }
 
+/**
+ * What the Details tab may send.
+ *
+ * The profile endpoint takes a strict schema, so this list has to match it
+ * exactly: the form once posted a field the server did not declare and every
+ * save was rejected.
+ */
+export type CustomerProfileUpdate = {
+  fullName?: string;
+  /** The sign-in number. Changing it changes how the customer logs in. */
+  phone?: string;
+  email?: string | null;
+  region?: string;
+  district?: string | null;
+  subCounty?: string | null;
+  parish?: string | null;
+  village?: string | null;
+  address?: string;
+};
+
 export interface CustomerOrder {
   id: number;
   reference: string;
@@ -141,7 +161,7 @@ export async function fetchCustomerProfile(): Promise<CustomerProfile> {
   return data.data;
 }
 
-export async function updateCustomerProfile(updates: Partial<CustomerProfile>): Promise<CustomerProfile> {
+export async function updateCustomerProfile(updates: CustomerProfileUpdate): Promise<CustomerProfile> {
   const data = await request<{ data: CustomerProfile }>('/customers/me', {
     method: 'PATCH',
     body: JSON.stringify(updates),
@@ -292,7 +312,7 @@ export async function fetchCustomerPreferences(): Promise<CustomerPreferences> {
   return data.data;
 }
 
-export async function updateCustomerPreferences(preferences: Record<string, unknown>): Promise<CustomerPreferences> {
+export async function updateCustomerPreferences(preferences: CustomerPreferenceFlags): Promise<CustomerPreferences> {
   const data = await request<{ data: CustomerPreferences }>('/customers/preferences', {
     method: 'PATCH',
     body: JSON.stringify({ preferences }),

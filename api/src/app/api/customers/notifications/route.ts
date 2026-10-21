@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { notifications } from '@/db/schema';
 import { getCurrentCustomer } from '@/lib/customerSession';
 import { error, json } from '@/lib/http';
+import { csrfCheck } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,9 @@ const markSchema = z
  * clear somebody else's inbox by guessing an id.
  */
 export async function PATCH(request: Request) {
+  const blocked = csrfCheck(request);
+  if (blocked) return blocked;
+
   const customer = await getCurrentCustomer(request);
   if (!customer) return error('Not signed in', 401);
 

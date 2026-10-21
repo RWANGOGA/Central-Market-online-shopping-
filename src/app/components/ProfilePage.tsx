@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StatusBar from './shared/StatusBar';
 import svgPaths from "../imports/svg-s5y93igtx2";
 import { formatUgx } from "../lib/currency";
-import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, fetchCustomerPreferences, updateCustomerPreferences, fetchCustomerNotifications, markCustomerNotificationsRead, fetchCustomerAddresses, createCustomerAddress, updateCustomerAddress, deleteCustomerAddress, type CustomerProfile, type CustomerOrder, type CustomerPreferences, type CustomerNotification, type CustomerAddress } from '../lib/customerApi';
+import { fetchCustomerProfile, updateCustomerProfile, fetchCustomerOrders, fetchCustomerPreferences, updateCustomerPreferences, fetchCustomerNotifications, markCustomerNotificationsRead, fetchCustomerAddresses, createCustomerAddress, updateCustomerAddress, deleteCustomerAddress, type CustomerProfile, type CustomerOrder, type CustomerNotification, type CustomerAddress, type CustomerPreferenceFlags } from '../lib/customerApi';
 import type { ReorderOutcome } from '../lib/cartProvider';
 
 interface ProfilePageProps {
@@ -70,6 +70,34 @@ const EMPTY_ADDRESS_DRAFT: AddressDraft = {
   isDefault: false,
 };
 
+/**
+ * The notification and delivery flags the server will store.
+ *
+ * This list and the schema on `PATCH /api/customers/preferences` are the same
+ * contract. The form used to read these values out of the DOM by data
+ * attribute, which meant a renamed attribute silently saved the default.
+ */
+const PREFERENCE_FLAGS = [
+  { key: 'orderUpdates', label: 'Order status updates', fallback: true },
+  { key: 'farmNotifications', label: 'Farm harvest notifications', fallback: false },
+  { key: 'highlightVegan', label: 'Highlight Certified Vegan (VG) produce', fallback: false },
+  { key: 'reusablePackaging', label: 'Reusable bags and crates preferred', fallback: false },
+  { key: 'promotions', label: 'Promotions and offers', fallback: false },
+] as const;
+
+type PreferenceKey = (typeof PREFERENCE_FLAGS)[number]['key'];
+type PreferenceDraft = Record<PreferenceKey, boolean>;
+
+/** Anything the server has not confirmed as a boolean falls back to the default. */
+function draftFrom(stored: CustomerPreferenceFlags | undefined): PreferenceDraft {
+  const draft = {} as PreferenceDraft;
+  for (const flag of PREFERENCE_FLAGS) {
+    const value = stored?.[flag.key];
+    draft[flag.key] = typeof value === 'boolean' ? value : flag.fallback;
+  }
+  return draft;
+}
+
 export default function ProfilePage({
   customerInfo,
   customerSession,
@@ -91,12 +119,13 @@ export default function ProfilePage({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedInfo, setEditedInfo] = useState(customerInfo);
+  const [editedEmail, setEditedEmail] = useState('');
   const [orderFilter, setOrderFilter] = useState<'all' | 'active' | 'delivered'>('all');
-  const [preferences, setPreferences] = useState<CustomerPreferences | null>(null);
   const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [prefDraft, setPrefDraft] = useState<PreferenceDraft>(() => draftFrom(undefined));
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [addressEditor, setAddressEditor] = useState<{ id: number | null; draft: AddressDraft } | null>(null);
   const [addressError, setAddressError] = useState<string | null>(null);
@@ -142,7 +171,7 @@ export default function ProfilePage({
   const loadPreferences = useCallback(async () => {
     try {
       const data = await fetchCustomerPreferences();
-      setPreferences(data);
+      setPrefDraft(draftFrom(data.preferences));
     } catch {
       // Preferences are optional
     }
@@ -250,6 +279,7 @@ export default function ProfilePage({
       const saved = await updateCustomerProfile({
         fullName: editedInfo.fullName.trim(),
         phone: editedInfo.phone.trim(),
+        email: editedEmail.trim(),
         region: editedInfo.region.trim(),
         district: editedInfo.district.trim(),
         subCounty: editedInfo.subCounty.trim(),
@@ -278,19 +308,14 @@ export default function ProfilePage({
 
   const handleSavePreferences = async () => {
     setSavingPreferences(true);
+    setError(null);
     try {
-      await updateCustomerPreferences({
-        highlightVegan: (document.querySelector('[data-pref="highlightVegan"]') as HTMLInputElement)?.checked ?? false,
-        farmNotifications: (document.querySelector('[data-pref="farmNotifications"]') as HTMLInputElement)?.checked ?? false,
-        reusablePackaging: (document.querySelector('[data-pref="reusablePackaging"]') as HTMLInputElement)?.checked ?? false,
-        orderUpdates: (document.querySelector('[data-pref="orderUpdates"]') as HTMLInputElement)?.checked ?? false,
-        promotions: (document.querySelector('[data-pref="promotions"]') as HTMLInputElement)?.checked ?? false,
-      });
+      await updateCustomerPreferences({ ...prefDraft });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
       await loadPreferences();
-    } catch {
-      setError('Could not save preferences');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save preferences');
     } finally {
       setSavingPreferences(false);
     }
@@ -836,6 +861,7 @@ export default function ProfilePage({
                         village: profile?.village || customerInfo.village,
                         address: profile?.address || customerInfo.address,
                       });
+                      setEditedEmail(profile?.email ?? '');
                       setIsEditing(true);
                     }
                   }}
@@ -874,6 +900,19 @@ export default function ProfilePage({
                       placeholder="07XX XXX XXX"
                       className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
                     />
+                    <p className="text-[11px] text-[#9a9a9a] mt-1">
+                      This is your sign-in number. Change it only if you can receive messages on the new one.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[12px] text-[#757575] block mb-1">Email (optional)</label>
+                    <input
+                      type="email"
+                      value={editedEmail}
+                      onChange={(e) => setEditedEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-[14px]"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -902,6 +941,7 @@ export default function ProfilePage({
                 <div className="space-y-1 font-['Inter:Regular',_sans-serif] text-[14px] text-[#000000] leading-[22px]">
                   <p className="font-medium">{displayName}</p>
                   <p className="text-[#757575]">{displayPhone}</p>
+                  {profile?.email && <p className="text-[#757575]">{profile.email}</p>}
                   <p className="text-[#757575]">{displayAddress}</p>
                   <p className="text-[#757575]">{displayPlaceOrDefault}</p>
                 </div>
@@ -1089,51 +1129,19 @@ export default function ProfilePage({
                 </button>
               </div>
               <div className="space-y-3">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[13px] text-[#000000]">Order status updates</span>
-                  <input
-                    type="checkbox"
-                    data-pref="orderUpdates"
-                    defaultChecked={preferences?.preferences?.orderUpdates ?? true}
-                    className="accent-[#426b1f] w-4 h-4 rounded"
-                  />
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[13px] text-[#000000]">Farm harvest notifications</span>
-                  <input
-                    type="checkbox"
-                    data-pref="farmNotifications"
-                    defaultChecked={preferences?.preferences?.farmNotifications ?? false}
-                    className="accent-[#426b1f] w-4 h-4 rounded"
-                  />
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[13px] text-[#000000]">Highlight Certified Vegan (VG) produce</span>
-                  <input
-                    type="checkbox"
-                    data-pref="highlightVegan"
-                    defaultChecked={preferences?.preferences?.highlightVegan ?? false}
-                    className="accent-[#426b1f] w-4 h-4 rounded"
-                  />
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[13px] text-[#000000]">Reusable bags and crates preferred</span>
-                  <input
-                    type="checkbox"
-                    data-pref="reusablePackaging"
-                    defaultChecked={preferences?.preferences?.reusablePackaging ?? false}
-                    className="accent-[#426b1f] w-4 h-4 rounded"
-                  />
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[13px] text-[#000000]">Promotions and offers</span>
-                  <input
-                    type="checkbox"
-                    data-pref="promotions"
-                    defaultChecked={preferences?.preferences?.promotions ?? false}
-                    className="accent-[#426b1f] w-4 h-4 rounded"
-                  />
-                </label>
+                {PREFERENCE_FLAGS.map((flag) => (
+                  <label key={flag.key} className="flex items-center justify-between cursor-pointer">
+                    <span className="text-[13px] text-[#000000]">{flag.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={prefDraft[flag.key]}
+                      onChange={(event) =>
+                        setPrefDraft((prev) => ({ ...prev, [flag.key]: event.target.checked }))
+                      }
+                      className="accent-[#426b1f] w-4 h-4 rounded"
+                    />
+                  </label>
+                ))}
               </div>
             </div>
           )}
