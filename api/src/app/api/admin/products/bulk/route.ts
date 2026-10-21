@@ -2,7 +2,8 @@ import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { productPriceHistory, products, nowText } from '@/db/schema';
-import { requireAdmin, priceLabelFor } from '@/lib/catalogue';
+import { priceLabelFor } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { error, json } from '@/lib/http';
 
 const changeSchema = z.object({
@@ -18,8 +19,9 @@ const changeSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'catalogue.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = changeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

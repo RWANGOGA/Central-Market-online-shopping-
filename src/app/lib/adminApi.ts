@@ -7,11 +7,13 @@ const BASE = '/api/admin';
  * another origin in production.
  */
 
+export type AdminRole = 'owner' | 'manager' | 'staff';
+
 export type AdminIdentity = {
   id: number;
   email: string;
   name: string;
-  role: 'owner' | 'manager';
+  role: AdminRole;
 };
 
 export type AdminProduct = {
@@ -602,6 +604,53 @@ export async function changePassword(currentPassword: string, newPassword: strin
   return call<{ id: number; email: string; name: string; role: string }>('/password', {
     method: 'PATCH',
     body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+/* ---------- Staff accounts (owner only) ---------- */
+
+export type AdminAccount = {
+  id: number;
+  name: string;
+  email: string;
+  role: AdminRole;
+  active: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+  activeSessions: number;
+};
+
+export type AdminDraft = {
+  name: string;
+  email: string;
+  role: AdminRole;
+  password: string;
+};
+
+export type AdminChange = {
+  name?: string;
+  role?: AdminRole;
+  active?: boolean;
+  password?: string;
+  revokeSessions?: boolean;
+};
+
+export async function listAdmins(): Promise<Result<AdminAccount[]>> {
+  return call<AdminAccount[]>('/admins');
+}
+
+export async function createAdmin(draft: AdminDraft): Promise<Result<AdminAccount>> {
+  return call<AdminAccount>('/admins', { method: 'POST', body: JSON.stringify(draft) });
+}
+
+/** The server refuses self-demotion, self-deactivation and removing the last owner. */
+export async function updateAdmin(
+  id: number,
+  change: AdminChange,
+): Promise<Result<AdminAccount>> {
+  return call<AdminAccount>(`/admins/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(change),
   });
 }
 

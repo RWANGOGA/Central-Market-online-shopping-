@@ -4,6 +4,7 @@ import {
   analyticsExportUrl,
   cancelPurchaseOrder,
   changePassword,
+  createAdmin,
   createProduct,
   createPromo,
   createPurchaseOrder,
@@ -15,6 +16,7 @@ import {
   getAnalyticsOverview,
   listActivityLog,
   listAdminProducts,
+  listAdmins,
   listCustomers,
   listInventoryMovements,
   listProductPerformance,
@@ -27,10 +29,13 @@ import {
   setPromoActive,
   signOut,
   updateProduct,
+  updateAdmin,
   type ActivityLogRow,
+  type AdminAccount,
   type AdminIdentity,
   type AdminProduct,
   type AdminPromo,
+  type AdminRole,
   type AnalyticsOverview,
   type CustomerRow,
   type ForecastResult,
@@ -44,6 +49,7 @@ import {
   type SupplierRow,
 } from '../lib/adminApi';
 import AdminGate from './AdminGate';
+import OrderQueue from './OrderQueue';
 import StockBadge from './StockBadge';
 import { describeStockOf } from '../lib/stockApi';
 import { formatUgx } from '../lib/currency';
@@ -51,6 +57,7 @@ import { formatUgx } from '../lib/currency';
 const UNITS = ['kg', 'each', 'pint', 'bunch', 'crate'] as const;
 
 type Tab =
+  | 'orders'
   | 'catalogue'
   | 'inventory'
   | 'purchase-orders'
@@ -124,7 +131,7 @@ function StaffShell({
   onSignOut: () => Promise<void>;
   onClose?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>('catalogue');
+  const [tab, setTab] = useState<Tab>(admin.role === 'staff' ? 'orders' : 'catalogue');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,13 +147,22 @@ function StaffShell({
     window.setTimeout(() => setError(null), 5000);
   }, []);
 
+  // Shop assistants only fulfil orders, so the write-heavy tabs are not shown
+  // to them at all. The server enforces the same matrix regardless.
+  const isStaff = admin.role === 'staff';
+
   const tabs: { value: Tab; label: string; disabled?: boolean }[] = [
-    { value: 'catalogue', label: 'Catalogue' },
-    { value: 'inventory', label: 'Inventory' },
-    { value: 'purchase-orders', label: 'Purchase orders' },
-    { value: 'suppliers', label: 'Suppliers' },
-    { value: 'promotions', label: 'Promotions' },
-    { value: 'analytics', label: 'Analytics' },
+    { value: 'orders', label: 'Orders' },
+    ...(isStaff
+      ? []
+      : [
+          { value: 'catalogue' as const, label: 'Catalogue' },
+          { value: 'inventory' as const, label: 'Inventory' },
+          { value: 'purchase-orders' as const, label: 'Purchase orders' },
+          { value: 'suppliers' as const, label: 'Suppliers' },
+          { value: 'promotions' as const, label: 'Promotions' },
+          { value: 'analytics' as const, label: 'Analytics' },
+        ]),
     { value: 'activity', label: 'Activity log' },
     { value: 'customers', label: 'Customers' },
     ...(canManageAdmins ? [{ value: 'admins' as const, label: 'Admins' }] : []),
@@ -161,7 +177,7 @@ function StaffShell({
               Staff
             </p>
             <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
-              {admin.name} · {admin.role}
+              {admin.name} · {ADMIN_ROLE_LABELS[admin.role] ?? admin.role}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -217,7 +233,8 @@ function StaffShell({
         )}
       </div>
 
-      <div className="p-4">
+      <div className={tab === 'orders' ? '' : 'p-4'}>
+        {tab === 'orders' && <OrderQueue canRefund={!isStaff} embedded />}
         {tab === 'catalogue' && <CataloguePanel admin={admin} flash={flash} fail={fail} />}
         {tab === 'inventory' && <InventoryPanel flash={flash} fail={fail} />}
         {tab === 'purchase-orders' && <PurchaseOrdersPanel flash={flash} fail={fail} />}
@@ -226,7 +243,7 @@ function StaffShell({
         {tab === 'analytics' && <AnalyticsPanel flash={flash} fail={fail} />}
         {tab === 'activity' && <ActivityPanel fail={fail} />}
         {tab === 'customers' && <CustomersPanel flash={flash} fail={fail} />}
-        {tab === 'admins' && canManageAdmins && <AdminsPanel flash={flash} fail={fail} />}
+        {tab === 'admins' && canManageAdmins && <AdminsPanel admin={admin} flash={flash} fail={fail} />}
       </div>
     </div>
   );
@@ -1576,10 +1593,55 @@ function CustomersPanel({ flash, fail }: { flash: (m: string) => void; fail: (m:
 
 /* ---------------- Admins (owner only) ---------------- */
 
-function AdminsPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: string) => void }) {
+const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
+  owner: 'Owner',
+  manager: 'Manager',
+  staff: 'Shop assistant',
+};
+
+const ADMIN_ROLE_HINTS: Record<AdminRole, string> = {
+  owner: 'Everything, including accounts and customer access.',
+  manager: 'Catalogue, stock, orders, promos and suppliers.',
+  staff: 'Fulfil orders only.',
+};
+
+function AdminsPanel({
+  admin,
+  flash,
+  fail,
+}: {
+  admin: AdminIdentity;
+  flash: (m: string) => void;
+  fail: (m: string) => void;
+}) {
+  const [accounts, setAccounts] = useState<AdminAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pendingId, setPendingId] = useState<number | null>(null);
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<AdminRole>('staff');
+  const [password, setPassword] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const [resetFor, setResetFor] = useState<number | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const result = await listAdmins();
+    setLoading(false);
+    if (!result) return fail('Could not reach the service.');
+    if (!result.ok) return fail(result.error);
+    setAccounts(result.data);
+  }, [fail]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1592,10 +1654,243 @@ function AdminsPanel({ flash, fail }: { flash: (m: string) => void; fail: (m: st
     flash('Password changed.');
   };
 
+  const addAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+    const result = await createAdmin({
+      name: name.trim(),
+      email: email.trim(),
+      role,
+      password,
+    });
+    setCreating(false);
+    if (!result) return fail('Could not reach the service.');
+    if (!result.ok) return fail(result.error);
+    setName(''); setEmail(''); setRole('staff'); setPassword('');
+    flash(`${result.data.name} can now sign in.`);
+    await load();
+  };
+
+  const change = async (
+    account: AdminAccount,
+    patch: { role?: AdminRole; active?: boolean; password?: string; revokeSessions?: boolean },
+  ) => {
+    setPendingId(account.id);
+    const result = await updateAdmin(account.id, patch);
+    setPendingId(null);
+    // Reload either way: a refused change (self-demotion, last owner) must not
+    // leave the select showing a role the server did not accept.
+    await load();
+    if (!result) return fail('Could not reach the service.');
+    if (!result.ok) return fail(result.error);
+    setResetFor(null);
+    setResetPassword('');
+    flash(`Updated ${result.data.name}.`);
+  };
+
   return (
-    <div className="space-y-3">
-      <p className="text-[14px] font-['Inter:Medium',_sans-serif] text-[#000000]">Change your password</p>
+    <div className="space-y-4">
+      <div>
+        <p className="text-[14px] font-['Inter:Medium',_sans-serif] text-[#000000]">Staff accounts</p>
+        <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+          Owners manage accounts. Managers run the shop. Shop assistants only move orders.
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">Loading accounts…</p>
+      ) : (
+        <div className="space-y-2">
+          {accounts.map((account) => {
+            const self = account.id === admin.id;
+            const pending = pendingId === account.id;
+            return (
+              <div
+                key={account.id}
+                className="space-y-2 rounded-xl border border-neutral-200 bg-white p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-['Inter:Medium',_sans-serif] text-[#000000]">
+                      {account.name}
+                      {self ? ' (you)' : ''}
+                    </p>
+                    <p className="truncate text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+                      {account.email}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-['Inter:Medium',_sans-serif] ${
+                      account.active
+                        ? 'bg-[#426b1f]/10 text-[#426b1f]'
+                        : 'bg-neutral-100 text-neutral-500'
+                    }`}
+                  >
+                    {account.active ? 'Active' : 'Disabled'}
+                  </span>
+                </div>
+
+                <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+                  {account.activeSessions} open session{account.activeSessions === 1 ? '' : 's'} ·{' '}
+                  {account.lastLoginAt
+                    ? `last sign-in ${account.lastLoginAt.slice(0, 16)}`
+                    : 'never signed in'}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <select
+                    value={account.role}
+                    disabled={self || pending}
+                    onChange={(e) => change(account, { role: e.target.value as AdminRole })}
+                    title={ADMIN_ROLE_HINTS[account.role]}
+                    className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-[11px] font-['Inter:Medium',_sans-serif] disabled:bg-neutral-100 disabled:text-neutral-400"
+                  >
+                    {(Object.keys(ADMIN_ROLE_LABELS) as AdminRole[]).map((value) => (
+                      <option key={value} value={value}>
+                        {ADMIN_ROLE_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+
+                  {account.active ? (
+                    <button
+                      type="button"
+                      disabled={self || pending}
+                      onClick={() => change(account, { active: false })}
+                      className="rounded-lg border border-neutral-200 px-2 py-1 text-[11px] font-['Inter:Medium',_sans-serif] text-red-600 disabled:text-neutral-300"
+                    >
+                      Disable
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => change(account, { active: true })}
+                      className="rounded-lg border border-neutral-200 px-2 py-1 text-[11px] font-['Inter:Medium',_sans-serif] text-[#426b1f] disabled:text-neutral-300"
+                    >
+                      Enable
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={pending || account.activeSessions === 0}
+                    onClick={() => change(account, { revokeSessions: true })}
+                    className="rounded-lg border border-neutral-200 px-2 py-1 text-[11px] font-['Inter:Medium',_sans-serif] text-[#000000] disabled:text-neutral-300"
+                  >
+                    Sign out everywhere
+                  </button>
+
+                  {!self && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => {
+                        setResetFor(resetFor === account.id ? null : account.id);
+                        setResetPassword('');
+                      }}
+                      className="rounded-lg border border-neutral-200 px-2 py-1 text-[11px] font-['Inter:Medium',_sans-serif] text-[#000000] disabled:text-neutral-300"
+                    >
+                      Set password
+                    </button>
+                  )}
+                </div>
+
+                {resetFor === account.id && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      change(account, { password: resetPassword });
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="password"
+                      value={resetPassword}
+                      onChange={(e) => setResetPassword(e.target.value)}
+                      placeholder="New password (min 10)"
+                      className="w-full rounded-lg border border-neutral-200 px-2 py-1 text-[12px]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={resetPassword.length < 10 || pending}
+                      className={`shrink-0 rounded-lg px-2 py-1 text-[11px] text-white ${
+                        resetPassword.length < 10 || pending
+                          ? 'bg-neutral-300'
+                          : 'bg-[#426b1f]'
+                      }`}
+                    >
+                      Save
+                    </button>
+                  </form>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <form onSubmit={addAccount} className="space-y-2 rounded-xl border border-neutral-200 bg-white p-3">
+        <p className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#000000]">
+          Add a staff account
+        </p>
+        <Field label="Full name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px] w-full"
+          />
+        </Field>
+        <Field label="Email">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px] w-full"
+          />
+        </Field>
+        <Field label="Role">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as AdminRole)}
+            className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px] w-full bg-white"
+          >
+            {(Object.keys(ADMIN_ROLE_LABELS) as AdminRole[]).map((value) => (
+              <option key={value} value={value}>
+                {ADMIN_ROLE_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[10px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+            {ADMIN_ROLE_HINTS[role]}
+          </p>
+        </Field>
+        <Field label="Temporary password (min 10)">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="border border-neutral-200 rounded-lg px-3 py-2 text-[13px] w-full"
+          />
+        </Field>
+        <button
+          type="submit"
+          disabled={creating || !name.trim() || !email.trim() || password.length < 10}
+          className={`w-full rounded-lg py-2.5 text-[13px] text-white ${
+            creating || !name.trim() || !email.trim() || password.length < 10
+              ? 'bg-neutral-300 cursor-not-allowed'
+              : 'bg-[#426b1f]'
+          }`}
+        >
+          {creating ? 'Creating…' : 'Create account'}
+        </button>
+        <p className="text-[10px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+          Share the temporary password in person. They can change it after signing in.
+        </p>
+      </form>
+
       <form onSubmit={submit} className="space-y-2">
+        <p className="text-[14px] font-['Inter:Medium',_sans-serif] text-[#000000]">Change your password</p>
         <Field label="Current password">
           <input
             type="password"

@@ -1,15 +1,16 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { purchaseOrders } from '@/db/schema';
-import { requireRole } from '@/lib/adminAuth';
+import { guardAdmin } from '@/lib/adminAuth';
 import { error, json } from '@/lib/http';
 import { recordActivity } from '@/lib/activity';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Ctx) {
-  const admin = await requireRole(request, ['owner', 'manager']);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'suppliers.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const { id } = await params;
   const key = Number(id);

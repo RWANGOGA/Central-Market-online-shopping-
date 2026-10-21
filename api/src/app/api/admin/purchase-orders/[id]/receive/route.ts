@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { purchaseOrderItems, purchaseOrders, nowText } from '@/db/schema';
-import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { recordMovement } from '@/lib/stockLedger';
 import { error, json } from '@/lib/http';
 import { recordActivity } from '@/lib/activity';
@@ -21,8 +21,9 @@ import { recordActivity } from '@/lib/activity';
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Ctx) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'suppliers.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const { id } = await params;
   const key = Number(id);

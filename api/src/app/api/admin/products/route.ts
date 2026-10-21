@@ -2,6 +2,7 @@ import { asc, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { products, nowText } from '@/db/schema';
 import { productInputSchema, priceLabelFor, requireAdmin, slugify } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { describeStock, stockState } from '@/lib/stock';
 import { storeProductImage } from '@/lib/uploads';
 import { error, json } from '@/lib/http';
@@ -53,8 +54,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'catalogue.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = productInputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

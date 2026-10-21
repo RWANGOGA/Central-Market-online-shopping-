@@ -19,6 +19,26 @@ export const ORDER_STATUSES: OrderStatus[] = [
   'cancelled',
 ];
 
+/** Mirrors the server's money summary; see api/src/lib/orderMoney.ts. */
+export type MoneyState =
+  | 'unpaid'
+  | 'cod_due'
+  | 'paid'
+  | 'part_refunded'
+  | 'refunded'
+  | 'refund_due';
+
+export type OrderMoney = {
+  paid: number;
+  codDue: number;
+  refundable: number;
+  refunded: number;
+  net: number;
+  state: MoneyState;
+  refundDue: boolean;
+  currency: string;
+};
+
 export type OrderRow = {
   id: number;
   reference: string;
@@ -31,6 +51,7 @@ export type OrderRow = {
   currency: string;
   itemCount: number;
   unitCount: number;
+  money: OrderMoney;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,11 +68,32 @@ export type OrderItem = {
 export type PaymentRow = {
   id: number;
   reference: string;
-  channel: string;
+  channel: 'mobile_money' | 'card' | 'wallet' | 'cod';
   provider: string;
   status: string;
   amount: number;
+  currency: string;
+  payerName: string | null;
+  payerPhone: string | null;
   maskedCard: string | null;
+  failureReason: string | null;
+  settledAt: string | null;
+  settledByEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RefundRow = {
+  id: number;
+  reference: string;
+  paymentId: number | null;
+  amount: number;
+  currency: string;
+  method: 'cash' | 'mobile_money' | 'wallet';
+  reason: string;
+  status: 'recorded' | 'cancelled';
+  createdByEmail: string | null;
+  createdAt: string;
 };
 
 export type TimelineEntry = {
@@ -77,6 +119,8 @@ export type OrderDetail = OrderRow & {
   } | null;
   items: OrderItem[];
   payments: PaymentRow[];
+  refunds: RefundRow[];
+  money: OrderMoney;
   timeline: TimelineEntry[];
   nextStatuses: OrderStatus[];
 };
@@ -148,6 +192,33 @@ export async function setOrderStatus(
   return call<{ data: OrderDetail }>(`/orders/${encodeURIComponent(String(idOrRef))}`, {
     method: 'PATCH',
     body: JSON.stringify({ status, note }),
+  });
+}
+
+/** Take the cash for a cash-on-delivery order. */
+export async function collectCash(
+  idOrRef: string | number,
+): Promise<Result<{ data: OrderDetail }>> {
+  return call<{ data: OrderDetail }>(
+    `/orders/${encodeURIComponent(String(idOrRef))}/collect-cash`,
+    { method: 'POST' },
+  );
+}
+
+export type RefundDraft = {
+  amount: number;
+  method: 'cash' | 'mobile_money' | 'wallet';
+  reason: string;
+};
+
+/** Record money already handed back to the customer. */
+export async function recordRefund(
+  idOrRef: string | number,
+  draft: RefundDraft,
+): Promise<Result<{ data: OrderDetail }>> {
+  return call<{ data: OrderDetail }>(`/orders/${encodeURIComponent(String(idOrRef))}/refunds`, {
+    method: 'POST',
+    body: JSON.stringify(draft),
   });
 }
 

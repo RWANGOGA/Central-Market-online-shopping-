@@ -2,7 +2,7 @@ import { and, eq, inArray, lt, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { orders, payments, nowText } from '@/db/schema';
 import { json } from '@/lib/http';
-import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { cancelPendingOrder } from '@/lib/orderLifecycle';
 import { createCustomerNotification } from '@/lib/notifications';
 import { recordActivity } from '@/lib/activity';
@@ -17,8 +17,9 @@ import { recordActivity } from '@/lib/activity';
  * that is still in flight is closed in the same transaction.
  */
 export async function POST(request: Request) {
-  const admin = await requireAdmin(request);
-  if (!admin) return new Response('unauthorized', { status: 401 });
+  const guard = await guardAdmin(request, 'orders.write');
+  if (!guard.ok) return new Response(guard.message, { status: guard.status });
+  const admin = guard.admin;
 
   const cutoff = sql`to_char(now() at time zone 'utc' - interval '15 minutes', 'YYYY-MM-DD HH24:MI:SS')`;
   const stale = await db

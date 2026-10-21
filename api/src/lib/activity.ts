@@ -11,6 +11,8 @@ export type ActivityAction =
   | 'product.price_history'
   | 'order.status'
   | 'order.sweep'
+  | 'order.refund'
+  | 'payment.collect'
   | 'inventory.adjust'
   | 'purchase_order.create'
   | 'purchase_order.receive'
@@ -20,6 +22,9 @@ export type ActivityAction =
   | 'promo.pause'
   | 'promo.resume'
   | 'customer.deactivate'
+  | 'admin.create'
+  | 'admin.update'
+  | 'admin.revoke'
   | 'admin.password_change';
 
 export type ActivityInput = {

@@ -1,6 +1,12 @@
 import { and, eq, gt, lt } from 'drizzle-orm';
 import { db } from '@/db';
 import { adminLoginAttempts, admins, adminSessions, nowText } from '@/db/schema';
+import {
+  can,
+  PERMISSION_LABELS,
+  type AdminRole,
+  type Permission,
+} from '@/lib/adminPermissions';
 import { createSessionToken, hashToken, verifyPassword } from '@/lib/password';
 
 /**
@@ -23,7 +29,7 @@ export type AdminIdentity = {
   id: number;
   email: string;
   name: string;
-  role: 'owner' | 'manager';
+  role: AdminRole;
 };
 
 function readCookie(header: string | null, name: string): string | null {
@@ -103,15 +109,31 @@ const DUMMY_HASH =
   '0000000000000000000000000000000000000000000000000000000000000000' +
   '0000000000000000000000000000000000000000000000000000000000000000';
 
-/** Authenticate and require one of the given roles. Returns null when not signed in or not permitted. */
-export async function requireRole(
+export type AdminGuard =
+  | { ok: true; admin: AdminIdentity }
+  | { ok: false; status: 401 | 403; message: string };
+
+/**
+ * The one gate for a staff route.
+ *
+ * Splitting 401 from 403 matters: "sign in again" and "your account is not
+ * allowed to do this" are different problems and should not look the same in
+ * the console.
+ */
+export async function guardAdmin(
   request: Request,
-  roles: ('owner' | 'manager')[],
-): Promise<AdminIdentity | null> {
+  permission?: Permission,
+): Promise<AdminGuard> {
   const admin = await authenticate(request);
-  if (!admin) return null;
-  if (!roles.includes(admin.role)) return null;
-  return admin;
+  if (!admin) return { ok: false, status: 401, message: 'Not signed in' };
+  if (permission && !can(admin.role, permission)) {
+    return {
+      ok: false,
+      status: 403,
+      message: `Your role (${admin.role}) cannot ${PERMISSION_LABELS[permission]}. Ask an owner for access.`,
+    };
+  }
+  return { ok: true, admin };
 }
 
 export async function authenticate(request: Request): Promise<AdminIdentity | null> {

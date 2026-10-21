@@ -2,6 +2,7 @@ import { desc, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { promoCodes } from '@/db/schema';
 import { requireAdmin } from '@/lib/catalogue';
+import { guardAdmin } from '@/lib/adminAuth';
 import { recordActivity } from '@/lib/activity';
 import { error, json } from '@/lib/http';
 import { csrfCheck } from '@/lib/security';
@@ -38,8 +39,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const blocked = csrfCheck(request);
   if (blocked) return blocked;
-  const admin = await requireAdmin(request);
-  if (!admin) return error('Not signed in', 401);
+  const guard = await guardAdmin(request, 'promos.write');
+  if (!guard.ok) return error(guard.message, guard.status);
+  const admin = guard.admin;
 
   const parsed = promoInputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? 'Invalid promo', 422);

@@ -1,14 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ORDER_STATUSES,
+  collectCash,
   getOrder,
   listOrders,
+  recordRefund,
   setOrderStatus,
   subscribeToOrders,
+  type MoneyState,
   type OrderDetail,
   type OrderListMeta,
   type OrderRow,
   type OrderStatus,
+  type RefundDraft,
 } from '../lib/orderApi';
 import { formatUgx } from '../lib/currency';
 
@@ -20,12 +24,36 @@ const STATUS_TONE: Record<OrderStatus, string> = {
   cancelled: 'bg-neutral-100 text-[#757575] border-neutral-200',
 };
 
+const MONEY_TONE: Record<MoneyState, string> = {
+  unpaid: 'bg-neutral-100 text-[#757575] border-neutral-200',
+  cod_due: 'bg-[#b07d2b]/12 text-[#b07d2b] border-[#b07d2b]/25',
+  paid: 'bg-[#2f855a]/10 text-[#2f855a] border-[#2f855a]/20',
+  part_refunded: 'bg-[#2b6cb0]/10 text-[#2b6cb0] border-[#2b6cb0]/20',
+  refunded: 'bg-neutral-100 text-[#757575] border-neutral-200',
+  refund_due: 'bg-red-50 text-red-700 border-red-200',
+};
+
+const MONEY_LABELS: Record<MoneyState, string> = {
+  unpaid: 'Unpaid',
+  cod_due: 'Cash to collect',
+  paid: 'Paid',
+  part_refunded: 'Partly refunded',
+  refunded: 'Refunded',
+  refund_due: 'Refund due',
+};
+
 const PAGE_SIZE = 25;
 
 export default function OrderQueue({
   onBack,
+  canRefund = false,
+  embedded = false,
 }: {
   onBack?: () => void;
+  /** Refunds are money out, so only roles with refunds.write see the form. */
+  canRefund?: boolean;
+  /** Rendered inside the staff console, which already provides the page chrome. */
+  embedded?: boolean;
 }) {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [meta, setMeta] = useState<OrderListMeta | null>(null);
@@ -124,20 +152,55 @@ export default function OrderQueue({
     load();
   };
 
+  const settle = async (order: OrderDetail) => {
+    const result = await collectCash(order.reference);
+    if (!result) {
+      setError('Could not reach the service.');
+      return;
+    }
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setSelected(result.data.data);
+    setError(null);
+    load();
+  };
+
+  const refund = async (order: OrderDetail, draft: RefundDraft) => {
+    const result = await recordRefund(order.reference, draft);
+    if (!result) {
+      setError('Could not reach the service.');
+      return;
+    }
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setSelected(result.data.data);
+    setError(null);
+    load();
+  };
+
   if (selected) {
     return (
       <OrderDetailPanel
         order={selected}
+        canRefund={canRefund}
         onBack={() => setSelected(null)}
         onMove={(next) => move(selected, next)}
+        onCollect={() => settle(selected)}
+        onRefund={(draft) => refund(selected, draft)}
         onError={setError}
       />
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-[#f7f7f5] pb-6">
-      <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 px-4 py-3">
+    <div className={`bg-[#f7f7f5] pb-6 ${embedded ? '' : 'h-full overflow-y-auto'}`}>
+      <div
+        className={`${embedded ? '' : 'sticky top-0'} z-10 bg-white border-b border-neutral-200 px-4 py-3`}
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[16px] font-['Newsreader:Medium',_sans-serif] text-[#426b1f] leading-[22px]">
@@ -264,6 +327,11 @@ export default function OrderQueue({
                 >
                   {order.status}
                 </span>
+                <span
+                  className={`inline-block mt-1 ml-1 text-[10px] px-2 py-0.5 rounded-full border font-['Inter:Medium',_sans-serif] ${MONEY_TONE[order.money.state]}`}
+                >
+                  {MONEY_LABELS[order.money.state]}
+                </span>
               </div>
             </div>
           </button>
@@ -320,17 +388,25 @@ function FilterChip({
 
 function OrderDetailPanel({
   order,
+  canRefund,
   onBack,
   onMove,
+  onCollect,
+  onRefund,
   onError,
 }: {
   order: OrderDetail;
+  canRefund: boolean;
   onBack: () => void;
   onMove: (next: string) => void;
+  onCollect: () => Promise<void>;
+  onRefund: (draft: RefundDraft) => Promise<void>;
   onError: (message: string | null) => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [collecting, setCollecting] = useState(false);
+  const [refunding, setRefunding] = useState(false);
 
   const act = async (next: string) => {
     setBusy(next);
@@ -338,6 +414,20 @@ function OrderDetailPanel({
     onMove(next);
     setBusy(null);
     setNote('');
+  };
+
+  const collect = async () => {
+    setCollecting(true);
+    onError(null);
+    await onCollect();
+    setCollecting(false);
+  };
+
+  const refund = async (draft: RefundDraft) => {
+    setRefunding(true);
+    onError(null);
+    await onRefund(draft);
+    setRefunding(false);
   };
 
   const address = order.shippingAddress;
@@ -376,6 +466,44 @@ function OrderDetailPanel({
           </p>
         </div>
 
+        <div className="rounded-xl border border-neutral-200 bg-white p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#000000]">Money</p>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full border font-['Inter:Medium',_sans-serif] ${MONEY_TONE[order.money.state]}`}
+            >
+              {MONEY_LABELS[order.money.state]}
+            </span>
+          </div>
+
+          <div className="mt-2 space-y-1">
+            <MoneyRow label="Paid" value={order.money.paid} zeroLabel="—" />
+            {order.money.codDue > 0 && (
+              <MoneyRow label="Cash to collect" value={order.money.codDue} />
+            )}
+            {order.money.refunded > 0 && (
+              <MoneyRow label="Refunded" value={order.money.refunded} zeroLabel="—" />
+            )}
+          </div>
+
+          {order.money.refundDue && (
+            <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700 font-['Inter:Regular',_sans-serif]">
+              This order was cancelled, but {formatUgx(order.money.refundable)} has not been paid
+              back yet.
+            </p>
+          )}
+
+          {order.money.codDue > 0 && (
+            <button
+              onClick={collect}
+              disabled={collecting}
+              className="mt-2 w-full rounded-lg bg-[#426b1f] text-white py-2 text-[12px] font-['Inter:Medium',_sans-serif] disabled:opacity-50"
+            >
+              {collecting ? 'Recording…' : `Collect ${formatUgx(order.money.codDue)} in cash`}
+            </button>
+          )}
+        </div>
+
         {order.nextStatuses.length > 0 ? (
           <div className="rounded-xl border border-neutral-200 bg-white p-3 space-y-2">
             <p className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#000000]">
@@ -388,17 +516,28 @@ function OrderDetailPanel({
               className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-[13px] font-['Inter:Regular',_sans-serif]"
             />
             <div className="flex flex-wrap gap-1.5">
-              {order.nextStatuses.map((next) => (
-                <button
-                  key={next}
-                  onClick={() => act(next)}
-                  disabled={busy !== null}
-                  className="px-3 py-2 rounded-lg border border-neutral-300 text-[12px] font-['Inter:Medium',_sans-serif] disabled:opacity-40"
-                >
-                  {busy === next ? 'Moving…' : `Mark ${next}`}
-                </button>
-              ))}
+              {order.nextStatuses.map((next) => {
+                // Delivering a cash order before the cash is in hand would
+                // close it with money missing; the server refuses too.
+                const blocked = next === 'delivered' && order.money.codDue > 0;
+                return (
+                  <button
+                    key={next}
+                    onClick={() => act(next)}
+                    disabled={busy !== null || blocked}
+                    title={blocked ? 'Collect the cash first' : undefined}
+                    className="px-3 py-2 rounded-lg border border-neutral-300 text-[12px] font-['Inter:Medium',_sans-serif] disabled:opacity-40"
+                  >
+                    {busy === next ? 'Moving…' : `Mark ${next}`}
+                  </button>
+                );
+              })}
             </div>
+            {order.money.codDue > 0 && (
+              <p className="text-[11px] text-[#757575] font-['Inter:Regular',_sans-serif]">
+                Collect the cash before marking this order delivered.
+              </p>
+            )}
           </div>
         ) : (
           <p className="rounded-xl border border-neutral-200 bg-white p-3 text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">
@@ -435,17 +574,68 @@ function OrderDetailPanel({
             <p className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#000000] mb-2">
               Payment
             </p>
-            {order.payments.map((payment) => (
-              <div key={payment.id} className="flex items-baseline justify-between gap-2">
-                <span className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#000000]">
-                  {payment.provider}
-                  {payment.maskedCard ? ` ${payment.maskedCard}` : ''}
-                </span>
-                <span className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">
-                  {payment.status} · {formatUgx(payment.amount)}
-                </span>
-              </div>
-            ))}
+            <div className="space-y-1.5">
+              {order.payments.map((payment) => (
+                <div key={payment.id}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#000000]">
+                      {payment.provider}
+                      {payment.maskedCard ? ` ${payment.maskedCard}` : ''}
+                    </span>
+                    <span className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+                      {payment.status} · {formatUgx(payment.amount)}
+                    </span>
+                  </div>
+                  {payment.settledByEmail && (
+                    <p className="text-[10px] font-['Inter:Regular',_sans-serif] text-[#9a9a9a]">
+                      Cash taken by {payment.settledByEmail} · {payment.settledAt}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {canRefund && order.money.refundable > 0 && (
+          <div className="rounded-xl border border-neutral-200 bg-white p-3 space-y-2">
+            <p className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#000000]">
+              Record a refund
+            </p>
+            <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+              Pay the customer back first, then log it here. At most{' '}
+              {formatUgx(order.money.refundable)} on this order.
+            </p>
+            <RefundForm max={order.money.refundable} busy={refunding} onSubmit={refund} />
+          </div>
+        )}
+
+        {order.refunds.length > 0 && (
+          <div className="rounded-xl border border-neutral-200 bg-white p-3">
+            <p className="text-[13px] font-['Inter:Medium',_sans-serif] text-[#000000] mb-2">
+              Refunds
+            </p>
+            <div className="space-y-2">
+              {order.refunds.map((refund) => (
+                <div key={refund.id}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[12px] font-['Inter:Medium',_sans-serif] text-[#000000]">
+                      {refund.reference}
+                    </span>
+                    <span className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+                      {formatUgx(refund.amount)}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-['Inter:Regular',_sans-serif] text-[#9a9a9a]">
+                    {refund.method.replace('_', ' ')} · {refund.createdByEmail ?? 'system'} ·{' '}
+                    {refund.createdAt}
+                  </p>
+                  <p className="text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+                    {refund.reason}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -480,7 +670,104 @@ function OrderDetailPanel({
   );
 }
 
-function MoneyRow({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+function RefundForm({
+  max,
+  busy,
+  onSubmit,
+}: {
+  max: number;
+  busy: boolean;
+  onSubmit: (draft: RefundDraft) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(String(max));
+  const [method, setMethod] = useState<RefundDraft['method']>('cash');
+  const [reason, setReason] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+
+    const value = Number.parseInt(amount, 10);
+    if (!Number.isFinite(value) || value <= 0) {
+      setProblem('Enter an amount greater than zero.');
+      return;
+    }
+    if (value > max) {
+      setProblem(`At most ${formatUgx(max)} can be refunded.`);
+      return;
+    }
+    if (reason.trim().length < 3) {
+      setProblem('Say why the money is going back.');
+      return;
+    }
+
+    setProblem(null);
+    await onSubmit({ amount: value, method, reason: reason.trim() });
+    setReason('');
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-2">
+      <label className="block text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+        Amount
+        <input
+          value={amount}
+          onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ''))}
+          inputMode="numeric"
+          className="mt-1 w-full border border-neutral-200 rounded-lg px-3 py-2 text-[13px] font-['Inter:Regular',_sans-serif]"
+        />
+      </label>
+
+      <label className="block text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+        Paid back by
+        <select
+          value={method}
+          onChange={(e) => setMethod(e.target.value as RefundDraft['method'])}
+          className="mt-1 w-full border border-neutral-200 rounded-lg px-3 py-2 text-[13px] font-['Inter:Regular',_sans-serif] bg-white"
+        >
+          <option value="cash">Cash</option>
+          <option value="mobile_money">Mobile money</option>
+          <option value="wallet">Bank or wallet</option>
+        </select>
+      </label>
+
+      <label className="block text-[11px] font-['Inter:Regular',_sans-serif] text-[#757575]">
+        Reason
+        <input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. damaged tomatoes, customer cancelled"
+          className="mt-1 w-full border border-neutral-200 rounded-lg px-3 py-2 text-[13px] font-['Inter:Regular',_sans-serif]"
+        />
+      </label>
+
+      {problem && (
+        <p className="text-[11px] text-red-700 font-['Inter:Regular',_sans-serif]">{problem}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={busy}
+        className="w-full rounded-lg border border-[#426b1f] text-[#426b1f] py-2 text-[12px] font-['Inter:Medium',_sans-serif] disabled:opacity-50"
+      >
+        {busy ? 'Recording…' : 'Record this refund'}
+      </button>
+    </form>
+  );
+}
+
+function MoneyRow({
+  label,
+  value,
+  strong,
+  zeroLabel = 'Free',
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+  zeroLabel?: string;
+}) {
   return (
     <div className="flex items-baseline justify-between">
       <span className="text-[12px] font-['Inter:Regular',_sans-serif] text-[#757575]">{label}</span>
@@ -489,7 +776,7 @@ function MoneyRow({ label, value, strong }: { label: string; value: number; stro
           strong ? 'text-[#426b1f] font-semibold' : 'text-[#000000]'
         }`}
       >
-        {value === 0 ? 'Free' : formatUgx(value)}
+        {value === 0 ? zeroLabel : formatUgx(value)}
       </span>
     </div>
   );
